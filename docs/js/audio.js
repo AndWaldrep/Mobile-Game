@@ -32,6 +32,20 @@ class Sfx {
     const comp = this.ctx.createDynamicsCompressor();
     this.master.connect(comp);
     comp.connect(this.ctx.destination);
+    // A short echo (generated impulse response) so shots ring out off the walls.
+    const irLen = Math.floor(this.ctx.sampleRate * 1.4);
+    const ir = this.ctx.createBuffer(2, irLen, this.ctx.sampleRate);
+    for (let ch = 0; ch < 2; ch++) {
+      const d = ir.getChannelData(ch);
+      for (let i = 0; i < irLen; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / irLen, 3.2);
+    }
+    this.verb = this.ctx.createConvolver();
+    this.verb.buffer = ir;
+    this.wetIn = this.ctx.createGain();
+    this.wetIn.gain.value = 0.35;
+    this.wetIn.connect(this.verb);
+    this.verb.connect(this.master);
+    this.wet = false;
     const len = this.ctx.sampleRate;
     this.noiseBuf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
     const d = this.noiseBuf.getChannelData(0);
@@ -58,6 +72,7 @@ class Sfx {
     g.gain.exponentialRampToValueAtTime(0.001, t + dur);
     o.connect(g);
     g.connect(this.master);
+    if (this.wet) g.connect(this.wetIn);
     o.start(t);
     o.stop(t + dur + 0.02);
   }
@@ -77,6 +92,7 @@ class Sfx {
     src.connect(f);
     f.connect(g);
     g.connect(this.master);
+    if (this.wet) g.connect(this.wetIn);
     src.start(t, Math.random() * 0.5);
     src.stop(t + dur + 0.02);
   }
@@ -87,9 +103,14 @@ class Sfx {
     const fall = 1 / (1 + dist * 0.06);
     if (fall < 0.04) return;
     const f = s.f * (dist > 0 ? Math.max(0.25, 1 - dist / 70) : 1);
+    this.wet = true;
     this.noise(s.dur * (dist > 0 ? 1.3 : 1), s.vol * fall, f);
     this.tone(s.thump * 2, s.dur * 0.6, 'sine', s.vol * 0.7 * fall, s.thump);
-    if (dist === 0) this.noise(0.03, 0.25, 4000, 'highpass');
+    this.wet = false;
+    if (dist === 0) {
+      this.noise(0.03, 0.25, 4000, 'highpass'); // crack
+      this.noise(0.05, 0.12, 2600, 'bandpass', 0.02, 4); // mechanism
+    }
   }
 
   footstep(vol = 0.08) {
@@ -118,8 +139,10 @@ class Sfx {
   pin() { this.tone(2400, 0.04, 'square', 0.08); this.noise(0.08, 0.15, 1500, 'bandpass', 0.06); }
   boom(dist) {
     const fall = 1 / (1 + dist * 0.04);
+    this.wet = true;
     this.noise(1.1, 0.9 * fall, 420 * Math.max(0.35, 1 - dist / 80));
     this.tone(70, 0.7, 'sine', 0.8 * fall, 30);
+    this.wet = false;
   }
   streak() { [660, 880, 1100].forEach((f, i) => this.tone(f, 0.12, 'square', 0.12, null, i * 0.09)); }
   win() { [523, 659, 784, 1046].forEach((f, i) => this.tone(f, 0.22, 'square', 0.15, null, i * 0.14)); }

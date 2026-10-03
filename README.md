@@ -23,6 +23,13 @@ even mid-match. There's nothing to install, and it runs on free GitHub Pages.
 - Bots at three skill levels. They find their way around the map, chase
   gunfire, strafe, and take a moment to react, like people do.
 - Reconnects on its own if a phone locks or loses signal mid-match
+- Real-time sun shadows, sky reflections on metal, water and guns, bumpy
+  surface detail, bullet holes, sparks, shell casings, and explosions that
+  light up the area. **Graphics: Auto** drops to a lighter mode on phones that
+  can't keep up.
+- Detailed soldiers (camo, vest, helmet and goggles, backpack) that run,
+  strafe, crouch, flinch and fall; detailed guns with a red-dot or holo
+  sight, scope, pump or bolt action, and a magazine-swap reload
 
 ## Controls
 
@@ -36,11 +43,24 @@ even mid-match. There's nothing to install, and it runs on free GitHub Pages.
 | Jump / crouch | **⤒** / **⤓** | Space / C |
 | Reload / grenade | **↻** / **💣** | R / G |
 | Scoreboard / menu | Tap the score / **☰** | Tab / Esc |
+| Full screen | **⛶** (top right) | |
 
 **Auto-fire** (on by default for touch) shoots when your crosshair is on an
 enemy in range, and **aim assist** slows your aim slightly over enemies.
-Turn either off, or change aim speed, under **⚙️ Controls** on the home
-screen or in the in-match menu.
+Under **⚙️ Controls** on the home screen (or in the in-match **☰** menu) you
+can also change aim speed, **button size** (S/M/L), hide the left-side FIRE
+button, switch **graphics** between Auto/High/Low, and turn sound on or off.
+
+The HUD keeps the middle clear: a faded radar in the top-right corner
+(enemies appear on it when they fire), the kill feed top-left, and health and
+ammo in one bar at the bottom. The health bar shows the number, turns yellow
+then red as you get hurt, shows a white trail for damage you just took, and
+glows while it's coming back.
+
+**Full screen:** on Android, tap **⛶**. iPhone's Safari doesn't let web games
+go full screen, so there the button explains the fix: **Share → Add to Home
+Screen**, then open Pocket Ops from your home screen and it runs full screen
+like an app.
 
 ## Inviting a friend
 
@@ -98,6 +118,9 @@ maps, in both modes.
 - Maps are built from boxes on a 1 m grid (`maps.js`). That keeps collision,
   bullets, line of sight and bot pathfinding simple and fast (`grid.js`). To
   make a new map, add an entry to `maps.js`; the tests check it automatically.
+- `world.js` builds the 3D level from the grid; `soldier.js`, `guns.js` and
+  `viewmodel.js` are the people and weapons, all built from simple shapes and
+  merged so each soldier is only about a dozen draw calls.
 - `match.js` is the game without any drawing, which is how the tests play
   whole matches. `main.js` draws it with Three.js and runs the HUD;
   `input.js` is the twin-stick controls.

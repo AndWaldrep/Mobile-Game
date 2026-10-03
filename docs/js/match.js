@@ -114,6 +114,7 @@ export class Match {
         e.hp = msg.hp;
         e.lastHit = msg.at;
         if (e.ai) e.ai.hurtBy(msg.by);
+        this.events.push({ type: 'damaged', ent: e });
         if (e.id === this.myId) this.events.push({ type: 'hurt', by: this.ents.get(msg.by), hp: msg.hp, w: msg.w });
         return;
       }

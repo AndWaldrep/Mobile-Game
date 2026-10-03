@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { MAPS, MAP_IDS, getGrid } from './maps.js';
-import { buildWorld } from './world.js';
+import { buildWorld, buildEnvScene } from './world.js';
 import { Match } from './match.js';
 import { Soldier } from './soldier.js';
 import { ViewModel } from './viewmodel.js';
@@ -20,7 +20,7 @@ const AUTOPILOT = params.has('autopilot'); // test hook: a bot plays for you
 const DEBUG = params.has('debug');
 const FRIEND = '#3d8bff';
 const ENEMY = '#ff4436';
-const UNIFORM = { friend: '#3e5f8c', enemy: '#8c3e35', ffa: '#5e6a48' };
+const UNIFORM = { friend: '#5f7f9e', enemy: '#a0644e', ffa: '#76805a' };
 
 // ------------------------------------------------------------------ renderer
 
@@ -29,14 +29,38 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPrefere
 let pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
 renderer.setPixelRatio(pixelRatio);
 renderer.autoClear = false;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(70, 1, 0.05, 1200);
 camera.rotation.order = 'YXZ';
-const hemi = new THREE.HemisphereLight('#ffffff', '#888888', 1.5);
-const sun = new THREE.DirectionalLight('#ffffff', 1.8);
-scene.add(hemi, sun);
+const hemi = new THREE.HemisphereLight('#ffffff', '#888888', 0.8);
+const sun = new THREE.DirectionalLight('#ffffff', 2.6);
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.bias = -0.0004;
+sun.shadow.normalBias = 0.035;
+scene.add(hemi, sun, sun.target);
+const pmrem = new THREE.PMREMGenerator(renderer);
 const viewModel = new ViewModel();
 const fx = new Fx(scene);
+
+// Graphics quality: 'high' has real-time shadows and full resolution; 'low' is for older phones.
+// 'auto' starts high and steps down if the phone can't keep up.
+const GFX = { high: { shadows: true, maxRatio: 2 }, low: { shadows: false, maxRatio: 1.25 } };
+let gfxLevel = 'high';
+function applyGraphics(level) {
+  gfxLevel = level;
+  const g = GFX[level];
+  renderer.shadowMap.enabled = g.shadows;
+  sun.castShadow = g.shadows;
+  pixelRatio = Math.min(window.devicePixelRatio || 1, g.maxRatio);
+  renderer.setPixelRatio(pixelRatio);
+  scene.traverse((o) => {
+    if (o.material) [].concat(o.material).forEach((m) => (m.needsUpdate = true));
+  });
+  resize();
+}
 
 function resize() {
   const w = window.innerWidth;
@@ -89,7 +113,15 @@ function loadSettings() {
   try {
     s = JSON.parse(localStorage.getItem('po-settings') || '{}');
   } catch {}
-  return { sens: typeof s.sens === 'number' ? s.sens : 1, autoFire: s.autoFire ?? true, assist: s.assist ?? true, invert: !!s.invert };
+  return {
+    sens: typeof s.sens === 'number' ? s.sens : 1,
+    autoFire: s.autoFire ?? true,
+    assist: s.assist ?? true,
+    invert: !!s.invert,
+    leftFire: s.leftFire ?? true,
+    btn: [0.85, 1, 1.15].includes(s.btn) ? s.btn : 1,
+    gfx: ['auto', 'high', 'low'].includes(s.gfx) ? s.gfx : 'auto',
+  };
 }
 
 function saveSettings() {
@@ -114,10 +146,33 @@ function loadMap(id) {
   scene.fog = new THREE.Fog(th.fog, th.fogNear, th.fogFar);
   hemi.color.set(th.hemiSky);
   hemi.groundColor.set(th.hemiGround);
-  hemi.intensity = th.hemi;
+  hemi.intensity = th.hemi * 0.5;
   sun.color.set(th.sun);
-  sun.intensity = th.sunI;
-  sun.position.set(...th.sunDir).multiplyScalar(100);
+  sun.intensity = th.sunI * 1.45;
+  // The sun's shadow covers the whole map.
+  const g = getGrid(id);
+  const cx = g.w / 2;
+  const cz = g.d / 2;
+  const r = Math.hypot(g.w, g.d) / 2 + 3;
+  sun.position.set(...th.sunDir).normalize().multiplyScalar(90).add(new THREE.Vector3(cx, 0, cz));
+  sun.target.position.set(cx, 0, cz);
+  const sc = sun.shadow.camera;
+  sc.left = sc.bottom = -r;
+  sc.right = sc.top = r;
+  sc.near = 10;
+  sc.far = 220;
+  sc.updateProjectionMatrix();
+  // Sky reflections for metal, water and guns.
+  const env = pmrem.fromScene(buildEnvScene(th), 0.04).texture;
+  if (app.envMap) app.envMap.dispose();
+  app.envMap = env;
+  scene.environment = env;
+  scene.environmentIntensity = 0.75;
+  viewModel.setEnvironment(env);
+  viewModel.hemi.color.set(th.hemiSky);
+  viewModel.hemi.groundColor.set(th.hemiGround);
+  viewModel.sun.color.set(th.sun).lerp(new THREE.Color('#ffffff'), 0.6); // keep your gun readable at sunset
+  if (renderer.shadowMap.enabled) scene.traverse((o) => o.material && [].concat(o.material).forEach((m) => (m.needsUpdate = true)));
   buildMinimap(id);
 }
 
@@ -209,7 +264,12 @@ function bindSettings(suffix) {
   const auto = $('autoFireInput' + suffix);
   const assist = $('assistInput' + suffix);
   const inv = $('invertInput' + suffix);
+  const left = $('leftFireInput' + suffix);
+  const sound = $('soundInput' + suffix);
   const sync = () => {
+    left.checked = app.settings.leftFire;
+    if (sound) sound.checked = !sfx.muted;
+    applyLayout();
     sens.value = app.settings.sens;
     $('sensVal' + suffix).textContent = Number(app.settings.sens).toFixed(1);
     auto.checked = app.settings.autoFire;
@@ -224,10 +284,41 @@ function bindSettings(suffix) {
   auto.onchange = () => ((app.settings.autoFire = auto.checked), saveSettings());
   assist.onchange = () => ((app.settings.assist = assist.checked), saveSettings());
   if (inv) inv.onchange = () => ((app.settings.invert = inv.checked), saveSettings());
+  left.onchange = () => {
+    app.settings.leftFire = left.checked;
+    saveSettings();
+    applyLayout();
+  };
+  if (sound)
+    sound.onchange = () => {
+      sfx.unlock();
+      sfx.setMuted(!sound.checked);
+    };
   return sync;
+}
+// Button size and graphics quality pickers (segmented buttons with data-pref).
+document.querySelectorAll('[data-pref]').forEach((seg) => {
+  const key = seg.dataset.pref;
+  seg.querySelectorAll('button').forEach((b) => {
+    b.onclick = () => {
+      const v = key === 'btn' ? Number(b.dataset.v) : b.dataset.v;
+      app.settings[key] = v;
+      saveSettings();
+      if (key === 'gfx') applyGraphics(v === 'low' ? 'low' : 'high');
+      applyLayout();
+    };
+  });
+});
+function applyLayout() {
+  $('controls').style.setProperty('--s', app.settings.btn);
+  $('btnFireL').hidden = !app.settings.leftFire;
+  document.querySelectorAll('[data-pref]').forEach((seg) => {
+    seg.querySelectorAll('button').forEach((b) => b.classList.toggle('selected', String(app.settings[seg.dataset.pref]) === b.dataset.v));
+  });
 }
 const syncSettings = [bindSettings(''), bindSettings('2')];
 syncSettings.forEach((f) => f());
+applyGraphics(app.settings.gfx === 'low' ? 'low' : 'high');
 
 if (inviteCode) {
   $('inviteNote').hidden = false;
@@ -380,13 +471,47 @@ function leaveRoom() {
   $('createBtn').textContent = 'Create match';
 }
 
-$('muteBtn').onclick = () => {
-  sfx.unlock();
-  sfx.setMuted(!sfx.muted);
-  $('muteBtn').textContent = sfx.muted ? '🔇' : '🔊';
-};
-$('muteBtn').textContent = sfx.muted ? '🔇' : '🔊';
 document.addEventListener('pointerdown', () => sfx.unlock(), { once: true });
+
+// Full screen. Android and iPad browsers can do it directly. iPhone Safari can't
+// for web pages, so there we explain how to add the game to the home screen,
+// which opens it full screen like an app.
+const standalone = window.matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches || navigator.standalone === true;
+const canFullscreen = !!(document.fullscreenEnabled || document.webkitFullscreenEnabled);
+const isFullscreen = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
+async function toggleFullscreen() {
+  sfx.unlock();
+  if (isFullscreen()) {
+    (document.exitFullscreen || document.webkitExitFullscreen)?.call(document);
+    return;
+  }
+  if (!canFullscreen) {
+    $('fsHelp').hidden = false;
+    return;
+  }
+  const el = document.documentElement;
+  try {
+    if (el.requestFullscreen) await el.requestFullscreen({ navigationUI: 'hide' });
+    else await el.webkitRequestFullscreen();
+    try {
+      await screen.orientation?.lock?.('landscape');
+    } catch {}
+  } catch {
+    $('fsHelp').hidden = false;
+  }
+}
+function updateFsButtons() {
+  for (const id of ['fsBtn', 'fsBtnHome']) {
+    $(id).hidden = standalone;
+    $(id).classList.toggle('on', isFullscreen());
+  }
+}
+$('fsBtn').onclick = toggleFullscreen;
+$('fsBtnHome').onclick = toggleFullscreen;
+$('fsHelpClose').onclick = () => ($('fsHelp').hidden = true);
+document.addEventListener('fullscreenchange', updateFsButtons);
+document.addEventListener('webkitfullscreenchange', updateFsButtons);
+updateFsButtons();
 
 // Scoreboard / menu
 function openBoard(menu) {
@@ -588,7 +713,8 @@ function addSoldier(e) {
   const m = app.match;
   const friendly = m.mode === 'tdm' && e.team === m.me?.team;
   const uniform = m.mode === 'tdm' ? (friendly ? UNIFORM.friend : UNIFORM.enemy) : UNIFORM.ffa;
-  const s = new Soldier(uniform, e.color);
+  const s = new Soldier(uniform, e.color, e.id);
+  s.setWeapon(e.weapon);
   if (friendly) s.setLabel(e.name, '#9cc7ff');
   scene.add(s.root);
   s.root.visible = e.alive;
@@ -646,7 +772,10 @@ function myMuzzle(out) {
 
 function impactFor(r) {
   if (r.ent) fx.blood(r.x, r.y, r.z);
-  else if (r.t < 150) fx.impact(r.x, r.y, r.z, r.nx, r.ny, r.nz);
+  else if (r.t < 150) {
+    fx.impact(r.x, r.y, r.z, r.nx, r.ny, r.nz);
+    if (r.nx || r.ny || r.nz) fx.hole(r.x, r.y, r.z, r.nx, r.ny, r.nz);
+  }
 }
 
 function handleEvents() {
@@ -663,6 +792,7 @@ function handleEvents() {
           sfx.gun(ev.w.id, 0);
           hud.shake = Math.max(hud.shake, ev.w.recoil * 2);
           myMuzzle(tmpA);
+          fx.flashLight(tmpA.x, tmpA.y, tmpA.z, 2.5, 6);
         } else {
           sol?.muzzle();
           if (sol) sol.muzzleWorld(tmpA);
@@ -683,11 +813,22 @@ function handleEvents() {
         sfx.gun(ev.w, distTo(tmpA.x, tmpA.y, tmpA.z));
         tmpB.set(ev.hx, ev.hy, ev.hz);
         fx.tracer(tmpA, tmpB);
-        const back = tmpA.clone().sub(tmpB).normalize();
+        if (distTo(tmpA.x, tmpA.y, tmpA.z) < 30) fx.flashLight(tmpA.x, tmpA.y, tmpA.z, 2, 6);
         if (ev.hit) fx.blood(ev.hx, ev.hy, ev.hz);
-        else if (tmpA.distanceTo(tmpB) < 150) fx.impact(ev.hx, ev.hy, ev.hz, back.x, back.y, back.z);
+        else if (tmpA.distanceTo(tmpB) < 150) {
+          // Find which surface the bullet hit, so the hole lies flat on it.
+          const d = tmpB.clone().sub(tmpA);
+          const len = d.length();
+          d.divideScalar(len || 1);
+          const hit = app.match.grid.raycast(tmpA.x, tmpA.y, tmpA.z, d.x, d.y, d.z, len + 0.5);
+          if (hit) impactFor({ ...hit, ent: null });
+          else fx.impact(ev.hx, ev.hy, ev.hz, -d.x, -d.y, -d.z);
+        }
         break;
       }
+      case 'damaged':
+        app.soldiers.get(ev.ent.id)?.hit();
+        break;
       case 'hitmarker':
         hud.hitT = 0.25;
         hud.hitKill = false;
@@ -715,7 +856,9 @@ function handleEvents() {
           input.ads = false;
           sfx.spawn();
         } else {
-          app.soldiers.get(ev.ent.id)?.revive();
+          const sol = app.soldiers.get(ev.ent.id);
+          sol?.setWeapon(ev.ent.weapon);
+          sol?.revive();
         }
         break;
       }
@@ -856,14 +999,14 @@ function drawMinimap(m, me, now) {
   ctx.beginPath();
   ctx.arc(W / 2, W / 2, W / 2 - 2, 0, Math.PI * 2);
   ctx.clip();
-  ctx.fillStyle = 'rgba(20,24,28,0.75)';
+  ctx.fillStyle = 'rgba(20,24,28,0.45)';
   ctx.fillRect(0, 0, W, W);
   const v = me.alive && me.sim ? me.sim : me.view;
   const yaw = me.alive && me.sim ? me.sim.yaw : 0;
   ctx.translate(W / 2, W / 2);
   ctx.rotate(yaw);
   ctx.translate(-v.x * S, -v.z * S);
-  ctx.globalAlpha = 0.85;
+  ctx.globalAlpha = 0.7;
   ctx.drawImage(mapImage, 0, 0, mapImage.width * (S / mapScale), mapImage.height * (S / mapScale));
   ctx.globalAlpha = 1;
   const uav = now < hud.uavUntil;
@@ -1073,8 +1216,22 @@ function updateHud(me, dt, sNow) {
     $('controls').classList.toggle('dead', hud.dead);
   }
   const hp = me.alive ? hpAt(me.hp ?? MAX_HP, me.lastHit ?? 0, sNow) : 0;
+  // Health: number, colored bar, a trail showing damage just taken, and a glow while healing.
+  const shown = Math.ceil(hp);
+  if (hud.hpShown !== shown) {
+    $('hpNum').textContent = shown;
+    hud.hpShown = shown;
+  }
+  hud.trail = hp >= (hud.trail ?? 100) ? hp : Math.max(hp, hud.trail - dt * (sNow - (me.lastHit || 0) > 450 ? 70 : 0));
   $('hpBar').style.width = `${hp}%`;
-  $('hpBar').classList.toggle('low', hp < 40);
+  $('hpTrail').style.width = `${hud.trail}%`;
+  const level = hp > 60 ? 'ok' : hp > 30 ? 'mid' : 'low';
+  if (hud.hpLevel !== level) {
+    $('hpPanel').className = level;
+    hud.hpLevel = level;
+  }
+  const healing = me.alive && hp < MAX_HP && sNow - (me.lastHit || 0) > 4000;
+  $('hpPanel').classList.toggle('regen', healing);
   $('vignette').style.opacity = me.alive ? Math.pow(1 - hp / MAX_HP, 1.6) * 0.95 : 0;
   if (me.alive && hp < 35) {
     hud.heartT -= dt;
@@ -1171,11 +1328,16 @@ function frame(now) {
   // Drop resolution on phones that struggle to keep up.
   if (app.match && now - last > 24) slowFrames++;
   else slowFrames = Math.max(0, slowFrames - 0.5);
-  if (slowFrames > 80 && pixelRatio > 1) {
-    pixelRatio = Math.max(1, pixelRatio - 0.25);
-    renderer.setPixelRatio(pixelRatio);
-    resize();
+  if (slowFrames > 80) {
     slowFrames = 0;
+    if (pixelRatio > 1) {
+      pixelRatio = Math.max(1, pixelRatio - 0.25);
+      renderer.setPixelRatio(pixelRatio);
+      resize();
+    } else if (app.settings.gfx === 'auto' && gfxLevel === 'high') {
+      applyGraphics('low');
+      toast('Graphics lowered to keep things smooth');
+    }
   }
   last = now;
   if (app.match && !app.match.over) {

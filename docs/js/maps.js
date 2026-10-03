@@ -21,6 +21,7 @@ export const MAPS = {
       fog: '#eed8ae',
       fogNear: 40,
       fogFar: 170,
+      cloud: '#ffffff',
       hemiSky: '#fff6e6',
       hemiGround: '#b08850',
       hemi: 1.55,
@@ -33,10 +34,10 @@ export const MAPS = {
     mats: {
       sand: { color: '#e2c48c', tex: 'sand' },
       path: { color: '#cdb08a', tex: 'tiles' },
-      wall: { color: '#d8b58a', tex: 'plaster' },
+      wall: { color: '#d8b58a', tex: 'plaster', deco: 'windows', doors: false },
       wall2: { color: '#e8d2ad', tex: 'plaster' },
-      house: { color: '#c99a6b', tex: 'plaster' },
-      block: { color: '#dcc29b', tex: 'plaster' },
+      house: { color: '#c99a6b', tex: 'plaster', deco: 'both', roofProps: true },
+      block: { color: '#dcc29b', tex: 'plaster', deco: 'windows', doors: false },
       stone: { color: '#b9ab98', tex: 'stone' },
       cover: { color: '#c7a074', tex: 'brick' },
       crate: { color: '#b07a42', tex: 'wood' },
@@ -44,6 +45,8 @@ export const MAPS = {
       trunk: { color: '#7a5634', tex: 'wood', vis: 0, under: 'sand' },
       truck: { color: '#5d7a63', tex: 'metal' },
       cab: { color: '#4b6652', tex: 'metal' },
+      barrel: { color: '#2d5c8f', tex: 'metal', vis: 0, under: 'sand', render: 'barrel' },
+      bags: { color: '#b39b72', tex: 'sand', vis: 0, under: 'sand', render: 'bags' },
     },
     build({ box, mbox, stairs, spawn, prop }) {
       box(0, 0, 48, 44, 0, 'sand');
@@ -59,7 +62,9 @@ export const MAPS = {
       mbox(14, 5, 2, 1, 1, 'crate');
       mbox(32, 5, 2, 1, 1, 'crate');
       mbox(7, 6, 1, 2, 1, 'crate');
-      mbox(22, 6, 4, 1, 1.1, 'cover');
+      mbox(22, 6, 4, 1, 1.1, 'bags');
+      mbox(1, 1, 1, 1, 1.1, 'barrel');
+      mbox(46, 1, 1, 1, 1.1, 'barrel');
       // A parked truck in each yard (bed is low enough to jump on).
       mbox(39, 3, 2, 2, 2.1, 'cab');
       mbox(41, 3, 3, 2, 1.0, 'truck');
@@ -67,7 +72,9 @@ export const MAPS = {
       // Houses that split each spawn from the middle, with lanes between them.
       mbox(14, 9, 7, 3, 4.2, 'house');
       mbox(27, 9, 7, 3, 4.2, 'house');
-      mbox(22, 11, 4, 1, 1.1, 'cover');
+      mbox(22, 11, 4, 1, 1.1, 'bags');
+      mbox(13, 12, 1, 1, 1.1, 'barrel');
+      mbox(34, 12, 1, 1, 1.1, 'barrel');
 
       // West: a long building with a walkable roof, stairs at both ends and a parapet to hide behind.
       box(4, 15, 10, 14, 3, 'block');
@@ -81,7 +88,7 @@ export const MAPS = {
       stairs(10, 9, 2, 6, 's', 0, 3, 'stone', true);
       // West alley
       mbox(1, 12, 2, 1, 1, 'crate');
-      box(2, 20, 1, 4, 1.1, 'cover');
+      box(2, 20, 1, 4, 1.1, 'bags');
       box(3, 21, 1, 2, 2, 'crate2');
       mbox(1, 17, 2, 1, 2, 'crate2');
 
@@ -101,6 +108,8 @@ export const MAPS = {
       prop('palm', 15.5, 13.5, {}, true);
       prop('palm', 32.5, 13.5, {}, true);
       mbox(20, 13, 1, 1, 1, 'crate');
+      prop('awning', 18, 16, { w: 2.6, d: 2.6, h: 2.7, color: '#b8432f' }, true);
+      prop('awning', 30, 16, { w: 2.6, d: 2.6, h: 2.7, color: '#2a6f9e' }, true);
 
       // East: walled courtyard with doors on every side.
       mbox(33, 13, 12, 1, 4, 'wall2');
@@ -117,7 +126,8 @@ export const MAPS = {
       box(37, 21, 1, 2, 2, 'crate2');
       box(35, 21, 1, 2, 1.1, 'cover');
       // Open ground east of the houses
-      mbox(36, 8, 3, 1, 1.1, 'cover');
+      mbox(36, 8, 3, 1, 1.1, 'bags');
+      mbox(43, 14, 1, 1, 1.1, 'barrel');
       mbox(45, 10, 1, 2, 1, 'crate');
       mbox(45, 16, 1, 1, 2, 'crate2');
       mbox(46, 18, 1, 1, 2, 'crate2');
@@ -140,6 +150,7 @@ export const MAPS = {
       fog: '#d98a6a',
       fogNear: 35,
       fogFar: 160,
+      cloud: '#ffc4a0',
       hemiSky: '#ffd2b0',
       hemiGround: '#4a4e6a',
       hemi: 1.45,
@@ -155,7 +166,7 @@ export const MAPS = {
       quay: { color: '#a19d94', tex: 'concrete' },
       fence: { color: '#7b8590', tex: 'metal' },
       water: { color: '#2f5f7a', tex: 'water', col: 99, ray: -0.6, vis: -0.6 },
-      brick: { color: '#a0573f', tex: 'brick' },
+      brick: { color: '#a0573f', tex: 'brick', deco: 'high' },
       floor: { color: '#7d7a76', tex: 'concrete' },
       steel: { color: '#6f7780', tex: 'metal' },
       rail: { color: '#e0b030', tex: 'metal' },
@@ -169,6 +180,7 @@ export const MAPS = {
       contG: { color: '#3c8d4f', tex: 'container' },
       contY: { color: '#d9a52b', tex: 'container' },
       contW: { color: '#d8d8d2', tex: 'container' },
+      barrel: { color: '#2d5c8f', tex: 'metal', vis: 0, under: 'ground', render: 'barrel' },
     },
     build({ box, mbox, stairs, spawn, prop }) {
       box(0, 0, 50, 46, 0, 'ground');
@@ -199,6 +211,9 @@ export const MAPS = {
       mbox(6, 6, 3, 1, 1.1, 'barrier');
       mbox(12, 3, 1, 2, 1, 'crate');
       mbox(2, 9, 2, 1, 1, 'crate');
+      mbox(14, 8, 1, 1, 1.1, 'barrel');
+      mbox(38, 9, 1, 1, 1.1, 'barrel');
+      box(13, 22, 1, 2, 1.1, 'barrel');
 
       // Container yard
       mbox(19, 5, 6, 2, 2.6, 'contR');
