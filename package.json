@@ -1,0 +1,20 @@
+{
+  "name": "pocket-ops",
+  "version": "1.0.0",
+  "description": "Pocket Ops: a multiplayer first-person shooter for phone browsers. Twin-stick touch controls, two maps, bots, peer-to-peer play. Static site for GitHub Pages.",
+  "type": "module",
+  "main": "server.cjs",
+  "private": true,
+  "scripts": {
+    "start": "node server.cjs",
+    "test": "node --test test/*.test.mjs",
+    "vendor": "cp node_modules/three/build/three.module.js node_modules/three/build/three.core.js docs/vendor/three/ && cp node_modules/peerjs/dist/peerjs.min.js docs/vendor/"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "peerjs": "^1.5.5",
+    "three": "^0.186.1"
+  }
+}
