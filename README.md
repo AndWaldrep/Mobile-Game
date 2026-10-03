@@ -125,6 +125,8 @@ only for the tests, or to update the bundled libraries with `npm run vendor`.
 
 ## Tests
 
+Developer notes (architecture, testing tools, gotchas) are in `CLAUDE.md`.
+
 ```bash
 npm install
 npm test
