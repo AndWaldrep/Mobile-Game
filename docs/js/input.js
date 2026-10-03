@@ -173,21 +173,24 @@ export class Input {
         e.preventDefault();
         e.stopPropagation();
         this.usedMouse = true;
+        this.mouseGame = true;
         this.lockMouse();
-        if (e.button === 0) this.mouseFire = true;
-        if (e.button === 2) this.mouseAds = true;
+        this.mouseButtons(e.buttons);
       },
       true
     );
+    // Browsers only send "pointerdown" for the first button; pressing another one while
+    // holding (left click while aiming with right) arrives as a move. So read every
+    // button's state from each event instead of tracking presses.
     window.addEventListener('pointerup', (e) => {
       if (e.pointerType !== 'mouse') return;
-      if (e.button === 0) this.mouseFire = false;
-      if (e.button === 2) this.mouseAds = false;
+      this.mouseButtons(e.buttons);
     });
     document.addEventListener('contextmenu', (e) => this.enabled && e.preventDefault());
     // Moving the mouse aims, whether or not it's captured yet.
     document.addEventListener('pointermove', (e) => {
       if (e.pointerType !== 'mouse' || !this.enabled || this.usedTouch) return;
+      if (this.mouseGame || this.locked()) this.mouseButtons(e.buttons);
       this.mouseX += e.movementX || 0;
       this.mouseY += e.movementY || 0;
     });
@@ -195,6 +198,12 @@ export class Input {
       if (this.enabled && !this.usedTouch && !(e.target instanceof HTMLInputElement) && e.key !== 'Escape' && e.key !== 'Tab') this.lockMouse();
     });
     window.addEventListener('blur', () => this.release());
+  }
+
+  mouseButtons(b) {
+    this.mouseFire = (b & 1) !== 0;
+    this.mouseAds = (b & 2) !== 0;
+    if (!b) this.mouseGame = false;
   }
 
   locked() {
@@ -219,6 +228,7 @@ export class Input {
   release() {
     this.keys.clear();
     this.mouseFire = this.mouseAds = false;
+    this.mouseGame = false;
     this.fireIds.clear();
     for (const s of [this.move, this.look]) {
       s.id = null;
