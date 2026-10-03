@@ -236,14 +236,18 @@ function renderPicker() {
 renderPicker();
 
 // Loadout pickers (home, lobby, and between lives)
+const STAT_NAMES = { damage: 'Damage', range: 'Range', rate: 'Fire rate', mobility: 'Mobility', control: 'Control' };
 function renderLoadouts() {
   for (const id of ['loadout', 'lobbyLoadout', 'deathLoadout']) {
     const el = $(id);
     const compact = el.classList.contains('compact');
     el.innerHTML = WEAPON_IDS.map((w) => {
       const W = WEAPONS[w];
+      const bars = Object.entries(W.stats)
+        .map(([k, v]) => `<span class="stat"><i>${STAT_NAMES[k]}</i><b style="width:${v * 10}%"></b></span>`)
+        .join('');
       return `<button data-weapon="${w}" class="${w === app.profile.weapon ? 'selected' : ''}">
-        <span class="wicon">${W.icon}</span><span class="wname">${W.name}</span>${compact ? '' : `<small>${W.blurb}</small>`}</button>`;
+        <span class="wicon">${W.icon}</span><span class="wname">${W.name}</span>${compact ? '' : `<small>${W.blurb}</small><span class="stats">${bars}</span>`}</button>`;
     }).join('');
   }
 }
@@ -533,7 +537,14 @@ $('scoreTop').onclick = () => openBoard(false);
 $('board').onclick = (e) => {
   if (e.target === $('board') || ($('menuExtras').hidden && !e.target.closest('button,input,label'))) closeBoard();
 };
-$('resumeBtn').onclick = closeBoard;
+$('resumeBtn').onclick = () => {
+  closeBoard();
+  input.lockMouse();
+};
+// On a computer, letting go of the mouse (Esc) pauses into the menu.
+document.addEventListener('pointerlockchange', () => {
+  if (!input.locked() && app.match && !app.match.over && !app.boardOpen && input.enabled && !input.usedTouch) openBoard(true);
+});
 $('quitBtn').onclick = () => {
   closeBoard();
   leaveRoom();
@@ -670,6 +681,12 @@ net.on('results', (msg) => {
 // ------------------------------------------------------------------ match setup
 
 const hud = {
+  bobT: 0,
+  dip: 0,
+  roll: 0,
+  fovK: 1,
+  landEvents: [],
+  swayT: 0,
   feed: [],
   hitT: 0,
   hitKill: false,
@@ -705,6 +722,7 @@ function beginMatch(msg) {
   $('scoreTop').classList.toggle('ffa', m.mode === 'ffa');
   input.read(0); // drop any queued presses
   show('match');
+  if (!input.usedTouch) input.lockMouse();
   requestWakeLock();
 }
 
@@ -893,6 +911,13 @@ function handleEvents() {
         break;
       case 'land':
         sfx.land();
+        hud.landEvents.push(0.5);
+        break;
+      case 'slide':
+        sfx.slide();
+        break;
+      case 'mantle':
+        sfx.mantle();
         break;
       case 'joined':
         addSoldier(ev.ent);
@@ -974,8 +999,9 @@ function drawMapImage(cv, grid, def, scale) {
       const i = z * grid.w + x;
       const h = grid.vis[i];
       let c;
+      const roofed = grid.shi[i] > grid.slo[i] && grid.slo[i] > 2.4;
       if (h < -0.1) c = '#2c5d7a';
-      else if (h <= 0.01) c = '#c9c2b0';
+      else if (h <= 0.01) c = roofed ? '#9d968a' : '#c9c2b0';
       else if (h < 1.3) c = '#8d867a';
       else if (h <= 3.1) c = '#6b655c';
       else c = '#3a3631';
@@ -1081,6 +1107,13 @@ function updateMatch(dt, now) {
       tx *= 1 - 0.4 * close;
       ty *= 1 - 0.4 * close;
     }
+    // A scoped sniper rifle drifts; crouching and holding still steadies it.
+    if (me.wpn.w.sway && me.wpn.adsT > 0.6) {
+      hud.swayT += dt;
+      const amt = (sim.crouch > 0.5 ? 0.35 : 1) * (1 + Math.min(2, sim.speed));
+      tx += Math.sin(hud.swayT * 1.1) * 0.024 * amt * dt;
+      ty += Math.sin(hud.swayT * 1.7 + 1) * 0.018 * amt * dt;
+    }
     sim.yaw = wrapAngle(sim.yaw - tx);
     sim.pitch = Math.max(-1.45, Math.min(1.45, sim.pitch - ty));
     if (inp.ads && !hud.prevAds && useAssist) {
@@ -1141,14 +1174,26 @@ function updateCamera(me, dt, sNow) {
   if (me && me.alive && me.sim) {
     const sim = me.sim;
     const target = sim.eye();
-    if (hud.camY === null || Math.abs(target - hud.camY) > 0.8) hud.camY = target;
+    if (hud.camY === null || Math.abs(target - hud.camY) > 0.8 || sim.mantle) hud.camY = target;
     hud.camY += (target - hud.camY) * Math.min(1, dt * 18);
-    camera.position.set(sim.x, hud.camY, sim.z);
+    const wpn = me.wpn;
+    // Walking bobs your view a little; landing dips it; strafing leans it.
+    const moving = sim.ground && sim.speed > 0.5 ? Math.min(1, sim.speed / 6) : 0;
+    hud.bobT += dt * (5 + sim.speed * 1.4) * (moving > 0 ? 1 : 0);
+    const bobK = (1 - wpn.adsT * 0.85) * (sim.slideT > 0 ? 0 : 1);
+    const bobY = Math.abs(Math.sin(hud.bobT)) * 0.045 * moving * bobK;
+    const bobX = Math.cos(hud.bobT) * 0.025 * moving * bobK;
+    for (const ev of hud.landEvents.splice(0)) hud.dip = Math.max(hud.dip, ev);
+    hud.dip = Math.max(0, hud.dip - dt * 1.2);
+    const side = Math.cos(sim.yaw) * sim.vx - Math.sin(sim.yaw) * sim.vz;
+    hud.roll += (-side * 0.006 * (1 - wpn.adsT * 0.7) + (sim.slideT > 0 ? 0.06 : 0) - hud.roll) * Math.min(1, dt * 8);
+    camera.position.set(sim.x + Math.cos(sim.yaw) * bobX, hud.camY + bobY - hud.dip * 0.25, sim.z - Math.sin(sim.yaw) * bobX);
     const shake = hud.shake;
     hud.shake = Math.max(0, hud.shake - dt * 0.6);
-    camera.rotation.set(sim.pitch + (Math.random() - 0.5) * shake, sim.yaw + (Math.random() - 0.5) * shake, 0);
-    const wpn = me.wpn;
-    const fov = baseFov * (1 - (1 - wpn.w.adsFov) * wpn.adsT);
+    camera.rotation.set(sim.pitch + (Math.random() - 0.5) * shake - hud.dip * 0.05, sim.yaw + (Math.random() - 0.5) * shake, hud.roll);
+    const sprintFov = sim.sprinting ? 1.08 : sim.slideT > 0 ? 1.1 : 1;
+    hud.fovK += (sprintFov - hud.fovK) * Math.min(1, dt * 6);
+    const fov = baseFov * hud.fovK * (1 - (1 - wpn.w.adsFov) * wpn.adsT);
     if (Math.abs(camera.fov - fov) > 0.01) {
       camera.fov = fov;
       camera.updateProjectionMatrix();
@@ -1224,6 +1269,10 @@ function updateHud(me, dt, sNow) {
   }
   hud.trail = hp >= (hud.trail ?? 100) ? hp : Math.max(hp, hud.trail - dt * (sNow - (me.lastHit || 0) > 450 ? 70 : 0));
   $('hpBar').style.width = `${hp}%`;
+  const st = me.sim ? me.sim.stamina : 1;
+  $('stamWrap').classList.toggle('show', st < 0.99 && me.alive);
+  $('stamBar').style.width = `${st * 100}%`;
+  $('stamWrap').classList.toggle('tired', !!me.sim?.tired);
   $('hpTrail').style.width = `${hud.trail}%`;
   const level = hp > 60 ? 'ok' : hp > 30 ? 'mid' : 'low';
   if (hud.hpLevel !== level) {

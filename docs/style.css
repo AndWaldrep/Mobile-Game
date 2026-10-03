@@ -616,3 +616,16 @@ tr.gap td { border: none; height: 10px; padding: 0; }
   font-weight: 700;
   z-index: 10;
 }
+
+/* Stamina (only shown while it's recovering) and weapon stat bars */
+#hpPanel .bars { display: flex; flex-direction: column; gap: 3px; }
+#stamWrap { width: 132px; height: 3px; border-radius: 2px; background: rgba(0, 0, 0, 0.45); overflow: hidden; opacity: 0; transition: opacity 0.3s; }
+#stamWrap.show { opacity: 1; }
+#stamBar { height: 100%; background: #9fd3ff; }
+#stamWrap.tired #stamBar { background: #ff9f43; }
+.loadout .stats { display: grid; grid-template-columns: auto 1fr; gap: 2px 6px; width: 100%; margin-top: 4px; align-items: center; }
+.loadout .stat { display: contents; }
+.loadout .stat i { font-style: normal; font-size: 10px; color: var(--muted); }
+.loadout .stat b { display: block; height: 4px; border-radius: 2px; background: var(--accent); }
+.loadout.compact { grid-template-columns: repeat(3, 1fr); }
+@media (orientation: portrait) { #stamWrap { width: 96px; } }

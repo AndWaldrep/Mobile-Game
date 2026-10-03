@@ -66,7 +66,7 @@ for (const map of MAP_IDS) {
               const s = e.sim;
               assert.ok(Number.isFinite(s.x + s.y + s.z + s.yaw + s.pitch), `${e.id} has a bad position`);
               assert.ok(s.x > 0 && s.z > 0 && s.x < g.w && s.z < g.d, `${e.id} left the map`);
-              assert.ok(g.floorAt(s.x, s.z, 0.3) <= s.y + 0.02, `${e.id} is inside a wall at ${s.x.toFixed(2)},${s.y.toFixed(2)},${s.z.toFixed(2)}`);
+              assert.ok(s.mantle || g.floorAt(s.x, s.z, 0.3, s.y) <= s.y + 0.02, `${e.id} is inside a wall at ${s.x.toFixed(2)},${s.y.toFixed(2)},${s.z.toFixed(2)}`);
               const lp = lastPos.get(e.id);
               if (lp && lp.life === e.life) travel.set(e.id, (travel.get(e.id) || 0) + Math.hypot(s.x - lp.x, s.z - lp.z));
               lastPos.set(e.id, { x: s.x, z: s.z, life: e.life });

@@ -73,7 +73,7 @@ export class Grenade {
     // Start a little in front of the thrower, but never inside a wall.
     let sx = eye[0] + dx * 0.4;
     let sz = eye[2] + dz * 0.4;
-    if (grid.colAt(Math.floor(sx), Math.floor(sz)) > eye[1] - 0.2) {
+    if (grid.solidAt(sx, eye[1] - 0.15, sz)) {
       sx = eye[0];
       sz = eye[2];
     }
@@ -95,20 +95,24 @@ export class Grenade {
     const sdt = dt / steps;
     for (let i = 0; i < steps; i++) {
       this.vy -= 20 * sdt;
+      // One axis at a time: bounce off whatever is solid (walls, crates, roofs, ceilings).
       const nx = this.x + this.vx * sdt;
-      const ny = this.y + this.vy * sdt;
-      const nz = this.z + this.vz * sdt;
-      const hx = g.rayAt(Math.floor(nx), Math.floor(this.z));
-      const hz = g.rayAt(Math.floor(this.x), Math.floor(nz));
-      if (ny < hx && Math.floor(nx) !== Math.floor(this.x)) {
+      if (g.solidAt(nx, this.y, this.z)) {
         this.vx *= -0.45;
         ev = 'bounce';
       } else this.x = nx;
-      if (ny < hz && Math.floor(nz) !== Math.floor(this.z)) {
+      const nz = this.z + this.vz * sdt;
+      if (g.solidAt(this.x, this.y, nz)) {
         this.vz *= -0.45;
         ev = 'bounce';
       } else this.z = nz;
-      const floor = g.rayAt(Math.floor(this.x), Math.floor(this.z));
+      const ny = this.y + this.vy * sdt;
+      if (this.vy > 0 && g.solidAt(this.x, ny + 0.08, this.z)) {
+        this.vy *= -0.3; // hit a ceiling
+        ev = 'bounce';
+        continue;
+      }
+      const floor = g.floorFor(Math.floor(this.x), Math.floor(this.z), this.y);
       if (ny <= floor + 0.08) {
         this.y = floor + 0.08;
         if (Math.abs(this.vy) > 2) ev = 'bounce';

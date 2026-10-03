@@ -47,8 +47,14 @@ export const MAPS = {
       cab: { color: '#4b6652', tex: 'metal' },
       barrel: { color: '#2d5c8f', tex: 'metal', vis: 0, under: 'sand', render: 'barrel' },
       bags: { color: '#b39b72', tex: 'sand', vis: 0, under: 'sand', render: 'bags' },
+      bldg: { color: '#dcc29b', tex: 'plaster' },
+      house2: { color: '#c99a6b', tex: 'plaster' },
+      house3: { color: '#d7b48c', tex: 'plaster' },
+      floorTile: { color: '#b8a58a', tex: 'tiles' },
+      roofTop: { color: '#cdb796', tex: 'plaster', roofProps: true },
+      roofFlat: { color: '#bfa27c', tex: 'plaster' },
     },
-    build({ box, mbox, stairs, spawn, prop }) {
+    build({ box, mbox, stairs, spawn, prop, building, slab }) {
       box(0, 0, 48, 44, 0, 'sand');
       box(1, 21, 46, 2, 0, 'path');
       box(23, 1, 2, 42, 0, 'path');
@@ -69,27 +75,40 @@ export const MAPS = {
       mbox(39, 3, 2, 2, 2.1, 'cab');
       mbox(41, 3, 3, 2, 1.0, 'truck');
 
-      // Houses that split each spawn from the middle, with lanes between them.
-      mbox(14, 9, 7, 3, 4.2, 'house');
-      mbox(27, 9, 7, 3, 4.2, 'house');
+      // Houses between each spawn and the middle: go in through the doors, shoot out the windows.
+      building({
+        x: 14, z: 8, w: 7, d: 5, h: 3.4, parapet: 0.5, wall: 'house2', floor: 'floorTile', roof: 'roofTop', mirror: true,
+        doors: [[17, 12], [14, 10], [20, 10]],
+        windows: [[15, 12], [19, 12], [16, 8], [18, 8]],
+      });
+      building({
+        x: 27, z: 8, w: 7, d: 5, h: 3.4, parapet: 0.5, wall: 'house3', floor: 'floorTile', roof: 'roofTop', mirror: true,
+        doors: [[30, 12], [27, 10], [33, 10]],
+        windows: [[28, 12], [32, 12], [29, 8], [31, 8]],
+      });
+      mbox(15, 9, 1, 1, 1, 'crate'); // a little cover inside
+      mbox(32, 11, 1, 1, 1, 'crate');
       mbox(22, 11, 4, 1, 1.1, 'bags');
       mbox(13, 12, 1, 1, 1.1, 'barrel');
       mbox(34, 12, 1, 1, 1.1, 'barrel');
 
-      // West: a long building with a walkable roof, stairs at both ends and a parapet to hide behind.
-      box(4, 15, 10, 14, 3, 'block');
-      mbox(4, 15, 10, 1, 4.1, 'wall2');
-      box(4, 15, 1, 14, 4.1, 'wall2');
-      box(13, 15, 1, 14, 4.1, 'wall2');
-      mbox(10, 15, 2, 1, 3, 'block'); // gaps in the parapet for the stairs
-      box(13, 18, 1, 2, 3.5, 'wall2'); // low firing windows on the plaza side
-      box(13, 24, 1, 2, 3.5, 'wall2');
-      box(7, 20, 2, 4, 4.4, 'wall2'); // shed on the roof
+      // West: a long two-level building. Ground floor with doors and windows on both sides,
+      // inside stairs and outside stairs up to a flat roof with a parapet to hide behind.
+      building({
+        x: 4, z: 15, w: 10, d: 14, h: 3.2, parapet: 1.2, wall: 'bldg', floor: 'floorTile', roof: 'roofFlat',
+        doors: [[13, 21], [13, 22], [4, 21], [4, 22]],
+        windows: [[13, 17], [13, 18], [13, 25], [13, 26], [4, 18], [4, 25], [7, 15], [7, 28]],
+        holes: [[5, 16, 6, 2], [5, 26, 6, 2]],
+      });
+      stairs(5, 16, 6, 2, 'e', 0, 3.2, 'stone', true); // inside stairs along the end walls up to the roof
+      mbox(10, 15, 2, 1, 3.2, 'bldg'); // the outside stairs come up through the wall here
       stairs(10, 9, 2, 6, 's', 0, 3, 'stone', true);
+      mbox(9, 18, 2, 1, 1, 'crate'); // counters and cover inside
+      box(10, 21, 1, 2, 1.1, 'cover');
       // West alley
       mbox(1, 12, 2, 1, 1, 'crate');
       box(2, 20, 1, 4, 1.1, 'bags');
-      box(3, 21, 1, 2, 2, 'crate2');
+      mbox(3, 18, 1, 1, 2, 'crate2');
       mbox(1, 17, 2, 1, 2, 'crate2');
 
       // Plaza: fountain, market crates, palms.
@@ -108,8 +127,8 @@ export const MAPS = {
       prop('palm', 15.5, 13.5, {}, true);
       prop('palm', 32.5, 13.5, {}, true);
       mbox(20, 13, 1, 1, 1, 'crate');
-      prop('awning', 18, 16, { w: 2.6, d: 2.6, h: 2.7, color: '#b8432f' }, true);
-      prop('awning', 30, 16, { w: 2.6, d: 2.6, h: 2.7, color: '#2a6f9e' }, true);
+      prop('awning', 18, 16, { w: 2.6, d: 2.6, h: 3.1, color: '#b8432f' }, true);
+      prop('awning', 30, 16, { w: 2.6, d: 2.6, h: 3.1, color: '#2a6f9e' }, true);
 
       // East: walled courtyard with doors on every side.
       mbox(33, 13, 12, 1, 4, 'wall2');
@@ -118,7 +137,11 @@ export const MAPS = {
       mbox(33, 16, 1, 2, 0, 'path');
       box(44, 21, 1, 2, 0, 'path');
       mbox(37, 13, 2, 1, 0, 'path');
+      slab(37, 13, 2, 1, 2.4, 4, 'wall2', true); // lintels over the north/south doors
+      slab(33, 16, 1, 2, 2.4, 4, 'wall2', true);
+      slab(44, 21, 1, 2, 2.4, 4, 'wall2');
       mbox(38, 17, 1, 3, 4, 'wall2');
+      slab(39, 14, 5, 5, 2.9, 3.2, 'roofFlat', true); // covered rooms in the corners of the courtyard
       mbox(35, 15, 1, 1, 1, 'crate');
       mbox(41, 15, 2, 1, 1, 'crate');
       mbox(42, 18, 1, 1, 2, 'crate2');
@@ -180,9 +203,12 @@ export const MAPS = {
       contG: { color: '#3c8d4f', tex: 'container' },
       contY: { color: '#d9a52b', tex: 'container' },
       contW: { color: '#d8d8d2', tex: 'container' },
+      office: { color: '#b9c0c4', tex: 'concrete' },
+      roofC: { color: '#8f949a', tex: 'concrete' },
+      roofW: { color: '#6d7480', tex: 'metal' },
       barrel: { color: '#2d5c8f', tex: 'metal', vis: 0, under: 'ground', render: 'barrel' },
     },
-    build({ box, mbox, stairs, spawn, prop }) {
+    build({ box, mbox, stairs, spawn, prop, building, slab, noslab }) {
       box(0, 0, 50, 46, 0, 'ground');
       box(16, 1, 2, 44, 0, 'lane');
       box(39, 1, 5, 44, 0, 'quay');
@@ -191,14 +217,20 @@ export const MAPS = {
       box(0, 45, 44, 1, 4.5, 'fence');
       box(0, 0, 1, 46, 4.5, 'fence');
 
-      // Warehouse (open roof) with a catwalk along the back wall.
-      mbox(2, 13, 13, 1, 5, 'brick');
-      box(2, 13, 1, 20, 5, 'brick');
-      box(14, 13, 1, 20, 5, 'brick');
-      box(3, 14, 11, 18, 0, 'floor');
-      box(14, 17, 1, 3, 0, 'floor'); // big doors to the yard
-      box(14, 26, 1, 3, 0, 'floor');
-      mbox(7, 13, 3, 1, 0, 'floor'); // doors to the spawn lots
+      // Warehouse with a roof, skylights, high windows and a catwalk along the back wall.
+      building({
+        x: 2, z: 13, w: 13, d: 20, h: 5.3, parapet: 0, wall: 'brick', floor: 'floor', roof: 'roofW',
+        doors: [[14, 17], [14, 18], [14, 19], [14, 26], [14, 27], [14, 28], [7, 13], [8, 13], [9, 13], [7, 32], [8, 32], [9, 32]],
+        holes: [[9, 15, 2, 4], [9, 21, 2, 4], [9, 27, 2, 4]],
+      });
+      for (const z of [15, 23, 30]) {
+        box(14, z, 1, 1, 3, 'brick'); // high windows on the yard side
+        slab(14, z, 1, 1, 4.2, 5.3, 'brick');
+      }
+      for (const [x, z] of [[4, 13], [11, 13], [4, 32], [11, 32]]) {
+        box(x, z, 1, 1, 3, 'brick');
+        slab(x, z, 1, 1, 4.2, 5.3, 'brick');
+      }
       box(3, 19, 3, 8, 2.5, 'steel');
       stairs(3, 14, 3, 5, 's', 0, 2.5, 'steel', true);
       box(6, 19, 1, 8, 3.6, 'rail');
@@ -227,11 +259,16 @@ export const MAPS = {
       stairs(36, 13, 5, 2, 'w', 0, 2.5, 'steel', true);
       mbox(34, 18, 2, 4, 2.6, 'contR');
       mbox(28, 18, 1, 2, 1.1, 'barrier');
-      // Two-high stack in the middle, plus low cover around it.
-      box(22, 22, 6, 2, 5.2, 'contB');
-      box(20, 20, 2, 6, 2.6, 'contG');
+      // Site office in the middle: two rooms around a staircase up to a roof with a view of the whole yard.
+      building({
+        x: 21, z: 19, w: 8, d: 8, h: 3.2, parapet: 1.2, wall: 'office', floor: 'floor', roof: 'roofC',
+        doors: [[21, 22], [21, 23], [26, 19], [26, 26], [28, 20], [28, 25]],
+        windows: [[21, 20], [21, 25], [25, 19], [27, 19], [25, 26], [27, 26], [28, 22], [28, 23]],
+        holes: [[22, 22, 6, 2]],
+      });
+      stairs(22, 22, 6, 2, 'e', 0, 3.2, 'steel');
       box(30, 21, 2, 4, 1.1, 'barrier');
-      mbox(24, 19, 2, 1, 1, 'crate');
+      mbox(19, 20, 1, 1, 1, 'crate');
       box(15, 22, 2, 2, 2.6, 'contW');
       mbox(17, 9, 2, 1, 2, 'crate');
       mbox(28, 10, 2, 1, 2, 'crate');

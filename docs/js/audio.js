@@ -2,6 +2,8 @@
 // Sounds from far away are quieter and duller.
 
 const GUNS = {
+  pistol: { f: 2200, dur: 0.12, vol: 0.4, thump: 140 },
+  lmg: { f: 1100, dur: 0.2, vol: 0.6, thump: 70 },
   ar: { f: 1400, dur: 0.16, vol: 0.5, thump: 90 },
   smg: { f: 1900, dur: 0.11, vol: 0.4, thump: 120 },
   shotgun: { f: 900, dur: 0.32, vol: 0.7, thump: 60 },
@@ -118,6 +120,8 @@ class Sfx {
   }
   jump() { this.noise(0.08, 0.1, 400, 'bandpass'); }
   land() { this.noise(0.12, 0.2, 250); }
+  slide() { this.noise(0.6, 0.22, 700, 'bandpass', 0, 0.8); }
+  mantle() { this.noise(0.1, 0.18, 400, 'bandpass'); this.noise(0.08, 0.15, 300, 'bandpass', 0.2); }
   dry() { this.tone(1800, 0.03, 'square', 0.08); }
   reload() {
     this.noise(0.05, 0.25, 2500, 'bandpass', 0, 3);

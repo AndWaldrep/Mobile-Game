@@ -2,12 +2,12 @@
 // as everyone else, so they play by the same rules. They wander the map with A*
 // pathfinding, chase gunfire, and fight with human-like reaction time and aim.
 
-import { STEP } from './grid.js';
+import { STEP, HEADROOM } from './grid.js';
 import { chest, head, wrapAngle, EYE, RADIUS } from './player.js';
 
 const SKILL = {
-  1: { react: 0.8, turn: 3.2, err: 0.11, errMin: 0.035, settle: 1.2, range: 0.65, fov: 1.1, nade: 0 },
-  2: { react: 0.55, turn: 5.0, err: 0.075, errMin: 0.022, settle: 1.8, range: 0.85, fov: 1.25, nade: 0.12 },
+  1: { react: 0.9, turn: 3.2, err: 0.11, errMin: 0.035, settle: 1.2, range: 0.65, fov: 1.1, nade: 0 },
+  2: { react: 0.62, turn: 5.0, err: 0.09, errMin: 0.032, settle: 1.8, range: 0.85, fov: 1.25, nade: 0.12 },
   3: { react: 0.3, turn: 7.5, err: 0.045, errMin: 0.007, settle: 2.6, range: 1, fov: 1.4, nade: 0.2 },
 };
 const PREFERRED = { ar: 16, smg: 8, shotgun: 4, sniper: 28 };
@@ -55,8 +55,8 @@ export class Bot {
     this.attacker = { id, t: 0 };
   }
 
-  hear(x, z) {
-    this.heard = { x, z, t: 0 };
+  hear(x, z, y = null) {
+    this.heard = { x, z, y, t: 0 };
   }
 
   // sim: our PlayerSim, wpn: our WeaponState, ctx: { ents: [{ id, team, alive, view }], mode, team }
@@ -101,7 +101,7 @@ export class Bot {
       const dy = p[1] - eyeY;
       const dz = p[2] - sim.z;
       const dist = Math.hypot(dx, dz);
-      this.lastSeen = { x: v.x, z: v.z, t: 0 };
+      this.lastSeen = { x: v.x, z: v.z, y: v.y, t: 0 };
       // Aim error shrinks the longer we track the target.
       const decay = Math.exp(-dt * k.settle);
       this.errYaw *= decay;
@@ -138,8 +138,8 @@ export class Bot {
         const mvz = -c * -ctl.mz - s * ctl.mx;
         const nx = sim.x + mvx * 1.2;
         const nz = sim.z + mvz * 1.2;
-        const h = g.floorAt(nx, nz, RADIUS);
-        if (h - sim.y > STEP || sim.y - h > 0.6) {
+        const h = g.floorAt(nx, nz, RADIUS, sim.y);
+        if (h - sim.y > STEP || sim.y - h > 0.6 || g.ceilAt(nx, nz, RADIUS, h) - h < HEADROOM) {
           this.strafe = -this.strafe;
           ctl.mx = -ctl.mx;
           ctl.mz = 0;
@@ -150,7 +150,7 @@ export class Bot {
       const aimErr = Math.abs(wrapAngle(sim.yaw - Math.atan2(-dx, -dz))) + Math.abs(sim.pitch - Math.atan2(dy, dist)) * 0.7;
       const tol = Math.atan2(0.45, dist) + 0.03;
       const inRange = dist < w.autoRange * k.range * (w.id === 'sniper' ? 1 : 1.1);
-      const settle = w.id === 'sniper' ? 0.35 + (1 - k.range) : 0; // scoped shots take a moment to line up
+      const settle = w.id === 'sniper' ? 0.9 + (1 - k.range) * 1.5 : 0; // scoped shots take a moment to line up
       if (this.targetSince > settle && aimErr < tol && inRange && (!ctl.ads || wpn.adsT > (w.scope ? 0.9 : 0.6))) {
         if (this.pause > 0) this.pause -= dt;
         else {
@@ -175,11 +175,11 @@ export class Bot {
       const want = this.chooseGoal(sim, ctx);
       if (!this.path || this.repathIn <= 0 || (want && this.goal && (want[0] !== this.goal[0] || want[1] !== this.goal[1]) && this.repathIn < 2)) {
         this.goal = want || this.randomGoal(ctx);
-        this.path = g.path(Math.floor(sim.x), Math.floor(sim.z), this.goal[0], this.goal[1]);
+        this.path = g.path(Math.floor(sim.x), Math.floor(sim.z), this.goal[0], this.goal[1], sim.y, this.goal[2] ?? null);
         this.repathIn = 3 + this.rand() * 2;
         if (!this.path) {
           this.goal = this.randomGoal(ctx);
-          this.path = g.path(Math.floor(sim.x), Math.floor(sim.z), this.goal[0], this.goal[1]);
+          this.path = g.path(Math.floor(sim.x), Math.floor(sim.z), this.goal[0], this.goal[1], sim.y, this.goal[2] ?? null);
           this.repathIn = 1;
         }
       }
@@ -258,14 +258,14 @@ export class Bot {
   }
 
   chooseGoal(sim, ctx) {
-    if (this.lastSeen && this.lastSeen.t < 6) return this.cellNear(this.lastSeen.x, this.lastSeen.z);
-    if (this.heard && this.heard.t < 5 && Math.hypot(this.heard.x - sim.x, this.heard.z - sim.z) < 35) return this.cellNear(this.heard.x, this.heard.z);
+    if (this.lastSeen && this.lastSeen.t < 6) return this.cellNear(this.lastSeen.x, this.lastSeen.z, this.lastSeen.y);
+    if (this.heard && this.heard.t < 5 && Math.hypot(this.heard.x - sim.x, this.heard.z - sim.z) < 35) return this.cellNear(this.heard.x, this.heard.z, this.heard.y);
     if (this.goal && Math.hypot(this.goal[0] + 0.5 - sim.x, this.goal[1] + 0.5 - sim.z) > 1.5) return this.goal;
     return null;
   }
 
-  cellNear(x, z) {
-    return [Math.max(0, Math.min(this.grid.w - 1, Math.floor(x))), Math.max(0, Math.min(this.grid.d - 1, Math.floor(z)))];
+  cellNear(x, z, y = null) {
+    return [Math.max(0, Math.min(this.grid.w - 1, Math.floor(x))), Math.max(0, Math.min(this.grid.d - 1, Math.floor(z))), y];
   }
 
   randomGoal(ctx) {
@@ -274,7 +274,7 @@ export class Bot {
     const enemies = ctx.ents.filter((e) => e.alive && e.id !== this.id && (ctx.mode !== 'tdm' || e.team !== ctx.team));
     if (enemies.length && this.rand() < 0.45) {
       const e = enemies[Math.floor(this.rand() * enemies.length)];
-      return this.cellNear(e.view.x + (this.rand() - 0.5) * 10, e.view.z + (this.rand() - 0.5) * 10);
+      return this.cellNear(e.view.x + (this.rand() - 0.5) * 10, e.view.z + (this.rand() - 0.5) * 10, e.view.y);
     }
     const spots = g.roam || (g.roam = this.roamSpots());
     return spots[Math.floor(this.rand() * spots.length)];
@@ -287,7 +287,7 @@ export class Bot {
     for (let z = 1; z < g.d - 1; z += 2) {
       for (let x = 1; x < g.w - 1; x += 2) {
         const i = z * g.w + x;
-        if (reach[i] && g.col[i] < 50) out.push([x, z]);
+        for (const lvl of [0, 1]) if (reach[i * 2 + lvl]) out.push([x, z, g.nodeFloor(i * 2 + lvl)]);
       }
     }
     return out;
@@ -300,8 +300,8 @@ export class Bot {
     if (!p || !p.length) return null;
     // Drop waypoints we've reached.
     while (p.length) {
-      const [cx, cz] = p[0];
-      const reached = Math.hypot(cx + 0.5 - sim.x, cz + 0.5 - sim.z) < 0.55 && Math.abs(g.colAt(cx, cz) - sim.y) < 0.6;
+      const [cx, cz, cy] = p[0];
+      const reached = Math.hypot(cx + 0.5 - sim.x, cz + 0.5 - sim.z) < 0.55 && Math.abs(cy - sim.y) < 0.6;
       if (!reached) break;
       p.shift();
     }
@@ -309,8 +309,9 @@ export class Bot {
     let idx = 0;
     for (let i = Math.min(p.length - 1, 6); i > 0; i--) {
       const [cx, cz] = p[i];
-      let ok = g.walkable(sim.x, sim.z, cx + 0.5, cz + 0.5);
-      for (let j = 0; ok && j <= i; j++) if (g.colAt(p[j][0], p[j][1]) - g.colAt(...(j ? p[j - 1] : [Math.floor(sim.x), Math.floor(sim.z)])) > STEP) ok = false;
+      let ok = g.walkable(sim.x, sim.z, cx + 0.5, cz + 0.5, sim.y);
+      for (let j = 0; ok && j <= i; j++) if (p[j][2] - (j ? p[j - 1][2] : sim.y) > STEP) ok = false;
+      if (ok && Math.abs(p[i][2] - sim.y) > 0.6 + i * STEP) ok = false;
       if (ok) {
         idx = i;
         break;
@@ -320,7 +321,7 @@ export class Bot {
     const dx = cx + 0.5 - sim.x;
     const dz = cz + 0.5 - sim.z;
     const d = Math.hypot(dx, dz) || 1;
-    const rise = g.colAt(p[0][0], p[0][1]) - sim.y;
+    const rise = p[0][2] - sim.y;
     const nearNext = Math.hypot(p[0][0] + 0.5 - sim.x, p[0][1] + 0.5 - sim.z) < 1.4;
     return { dx: dx / d, dz: dz / d, jump: rise > STEP && nearNext && sim.ground, far: p.length > 4 };
   }

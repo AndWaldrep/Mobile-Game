@@ -65,7 +65,8 @@
           <label class="toggle"><input id="leftFireInput" type="checkbox"> Left-side FIRE button</label>
           <div class="setting"><span>Button size</span><div class="seg" data-pref="btn"><button data-v="0.85">S</button><button data-v="1">M</button><button data-v="1.15">L</button></div></div>
           <div class="setting"><span>Graphics</span><div class="seg" data-pref="gfx"><button data-v="auto">Auto</button><button data-v="high">High</button><button data-v="low">Low</button></div></div>
-          <p class="hint">Left thumb: move (push all the way up to sprint). Right thumb: aim. Drag on FIRE to aim while shooting.</p>
+          <p class="hint">Phone: left thumb moves (push all the way up to sprint, tap ⤓ while sprinting to slide), right thumb aims, drag on FIRE to aim while shooting. Jump at a ledge to climb it.</p>
+          <p class="hint">Computer: mouse aims, left click fires, right click aims down sights, WASD moves, Shift sprints, Space jumps/climbs, C crouches/slides, R reloads, G grenade, Esc menu.</p>
         </details>
         <p class="hint">Turn your phone sideways to play · <a href="https://andwaldrep.github.io/AppProduction/">Kart Clash 🏁</a></p>
       </div>
@@ -175,7 +176,10 @@
       <div id="hpPanel">
         <svg class="hpIcon" viewBox="0 0 24 24"><path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z" fill="currentColor"/></svg>
         <b id="hpNum">100</b>
-        <div id="hpWrap"><div id="hpTrail"></div><div id="hpBar"></div><div class="hpTicks"></div></div>
+        <div class="bars">
+          <div id="hpWrap"><div id="hpTrail"></div><div id="hpBar"></div><div class="hpTicks"></div></div>
+          <div id="stamWrap"><div id="stamBar"></div></div>
+        </div>
       </div>
       <div id="ammo"><span id="wpnName">Ranger AR</span><b id="ammoNow">30</b><small id="ammoMax">/30</small></div>
     </div>

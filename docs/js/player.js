@@ -1,20 +1,27 @@
 // Soldier movement and hitboxes. Shared by your own soldier and the bots.
 // Yaw 0 looks toward -z (north); yaw grows turning left, like Three.js cameras.
+//
+// Movement has weight: you speed up and slow down over a moment, strafe and
+// backpedal slower than you run forward, sprint until you're out of breath,
+// slide if you crouch mid-sprint, and climb onto ledges up to chest height.
 
-import { STEP } from './grid.js';
+import { STEP, HEADROOM } from './grid.js';
 
 export const RADIUS = 0.32;
 export const EYE = 1.6;
 export const EYE_CROUCH = 1.08;
-export const GRAVITY = 22;
-export const JUMP_V = 7.6; // about 1.3 m: enough to hop onto crates and low walls
-export const WALK = 5.0;
-export const SPRINT = 7.0;
-export const CROUCH_SPEED = 2.4;
-export const ADS_SPEED = 2.9;
+export const BODY = HEADROOM; // standing height for collisions
+export const BODY_CROUCH = 1.25;
+export const GRAVITY = 21;
+export const JUMP_V = 7.2; // about 1.25 m: onto crates and over low walls
+export const WALK = 4.6;
+export const SPRINT = 6.6;
+export const CROUCH_SPEED = 2.1;
+export const ADS_SPEED = 2.6;
+export const SLIDE_SPEED = 8.2;
 export const MAX_HP = 100;
-export const REGEN_DELAY = 4000; // ms after the last hit before health comes back
-export const REGEN_RATE = 40 / 1000; // hp per ms
+export const REGEN_DELAY = 5000; // ms after the last hit before health comes back
+export const REGEN_RATE = 25 / 1000; // hp per ms
 
 // Health after regeneration, given the hp at the last hit and when that was.
 export function hpAt(hp, lastHit, now) {
@@ -40,7 +47,7 @@ export class PlayerSim {
 
   reset(s) {
     this.x = s.x;
-    this.y = s.y ?? this.grid.floorAt(s.x, s.z, RADIUS);
+    this.y = s.y ?? this.grid.floorAt(s.x, s.z, RADIUS, 0);
     this.z = s.z;
     this.vx = 0;
     this.vy = 0;
@@ -52,6 +59,14 @@ export class PlayerSim {
     this.sprinting = false;
     this.speed = 0;
     this.recoil = 0;
+    this.stamina = 1;
+    this.tired = false;
+    this.restT = 0;
+    this.slideT = 0;
+    this.mantle = null; // { t, from, to }
+    this.landT = 0;
+    this.sinceSprint = 9; // seconds since you stopped sprinting (guns need a moment to come up)
+    this.prevCrouch = false;
     this.events = [];
   }
 
@@ -59,10 +74,33 @@ export class PlayerSim {
     return this.y + EYE + (EYE_CROUCH - EYE) * this.crouch;
   }
 
-  // ctl: { mx, mz } stick (-1..1, mz < 0 is forward), sprint, jump, crouch, ads, speedMul
+  bodyH() {
+    return BODY + (BODY_CROUCH - BODY) * Math.min(1, this.crouch * 1.4);
+  }
+
+  // ctl: { mx, mz } stick (-1..1, mz < 0 is forward), sprint, jump, crouch, ads, speedMul, adsMul
   update(dt, ctl) {
     const g = this.grid;
-    this.crouch += ((ctl.crouch ? 1 : 0) - this.crouch) * Math.min(1, dt * 12);
+    // Climbing onto a ledge takes over until it's done.
+    if (this.mantle) {
+      const m = this.mantle;
+      m.t += dt / 0.42;
+      const t = Math.min(1, m.t);
+      const up = Math.min(1, t / 0.6);
+      this.y = m.from[1] + (m.to[1] - m.from[1]) * (1 - (1 - up) * (1 - up));
+      const fw = Math.max(0, (t - 0.6) / 0.4); // rise first, then roll forward onto the ledge
+      this.x = m.from[0] + (m.to[0] - m.from[0]) * fw;
+      this.z = m.from[2] + (m.to[2] - m.from[2]) * fw;
+      this.vx = this.vy = this.vz = 0;
+      if (t >= 1) {
+        this.mantle = null;
+        this.ground = true;
+      }
+      this.speed = 0;
+      this.sprinting = false;
+      return;
+    }
+
     let mx = ctl.mx || 0;
     let mz = ctl.mz || 0;
     const len = Math.hypot(mx, mz);
@@ -70,46 +108,107 @@ export class PlayerSim {
       mx /= len;
       mz /= len;
     }
-    this.sprinting = !!ctl.sprint && mz < -0.5 && !ctl.ads && this.crouch < 0.5;
+    // Crouching mid-sprint starts a slide.
+    const crouchPressed = !!ctl.crouch && !this.prevCrouch;
+    this.prevCrouch = !!ctl.crouch;
+    if (crouchPressed && this.sprinting && this.ground && this.speed > SPRINT * 0.8) {
+      this.slideT = 0.75;
+      const s = Math.max(SLIDE_SPEED, this.speed * 1.2) / Math.max(0.01, this.speed);
+      this.vx *= s;
+      this.vz *= s;
+      this.events.push('slide');
+    }
+    const sliding = this.slideT > 0;
+    let wantCrouch = !!ctl.crouch || sliding;
+    // Stay low if there's no room to stand up.
+    if (!wantCrouch && this.crouch > 0.3 && g.ceilAt(this.x, this.z, RADIUS, this.y) < this.y + BODY) wantCrouch = true;
+    this.crouch += ((wantCrouch ? 1 : 0) - this.crouch) * Math.min(1, dt * (sliding ? 16 : 10));
+
+    // Sprint uses stamina; run out and you have to catch your breath.
+    const wantSprint = !!ctl.sprint && mz < -0.5 && !ctl.ads && this.crouch < 0.5 && !sliding && this.ground;
+    if (this.stamina <= 0.02) this.tired = true;
+    if (this.tired && this.stamina > 0.3) this.tired = false;
+    this.sprinting = wantSprint && !this.tired;
+    if (this.sprinting) {
+      this.stamina = Math.max(0, this.stamina - dt / 6);
+      this.restT = 0;
+      this.sinceSprint = 0;
+    } else {
+      this.sinceSprint += dt;
+      this.restT += dt;
+      if (this.restT > 0.9) this.stamina = Math.min(1, this.stamina + dt / 4);
+    }
+
     let top = WALK;
-    if (this.sprinting) top = SPRINT;
+    if (this.sprinting) top = SPRINT * (ctl.sprintMul || 1);
     else if (this.crouch > 0.5) top = CROUCH_SPEED;
-    else if (ctl.ads) top = ADS_SPEED;
+    else if (ctl.ads) top = ADS_SPEED * (ctl.adsMul || 1);
     top *= ctl.speedMul || 1;
+    if (this.landT > 0) {
+      this.landT -= dt;
+      top *= 0.65;
+    }
+    // Strafing and backpedaling are slower than moving forward.
+    const fwd = -mz;
+    const dirScale = fwd >= 0 ? 1 : 0.72;
+    const sideScale = 0.86;
     const sin = Math.sin(this.yaw);
     const cos = Math.cos(this.yaw);
-    // Stick to world: forward is (-sin, -cos), right is (cos, -sin).
-    const wx = (-sin * -mz + cos * mx) * top;
-    const wz = (-cos * -mz - sin * mx) * top;
-    const accel = this.ground ? 14 : 3;
-    const k = Math.min(1, dt * accel);
-    this.vx += (wx - this.vx) * k;
-    this.vz += (wz - this.vz) * k;
+    const wx = (-sin * fwd * dirScale + cos * mx * sideScale) * top;
+    const wz = (-cos * fwd * dirScale - sin * mx * sideScale) * top;
+    if (sliding) {
+      // Slides carry you along and slowly bleed off speed.
+      this.slideT -= dt;
+      const k = Math.exp(-dt * 1.6);
+      this.vx *= k;
+      this.vz *= k;
+    } else {
+      const want = Math.hypot(wx, wz);
+      const accel = this.ground ? (want > Math.hypot(this.vx, this.vz) ? 9 : 12) : 1.6;
+      const k = Math.min(1, dt * accel);
+      this.vx += (wx - this.vx) * k;
+      this.vz += (wz - this.vz) * k;
+    }
 
-    if (ctl.jump && this.ground && this.crouch < 0.5) {
-      this.vy = JUMP_V;
-      this.ground = false;
-      this.events.push('jump');
+    if (ctl.jump && this.ground && !sliding) {
+      if (!this.tryMantle()) {
+        if (this.crouch < 0.5 && g.ceilAt(this.x, this.z, RADIUS, this.y) > this.y + BODY + 0.4) {
+          this.vy = JUMP_V;
+          this.ground = false;
+          this.stamina = Math.max(0, this.stamina - 0.08);
+          this.events.push('jump');
+        }
+      } else return;
     }
     if (!this.ground) this.vy -= GRAVITY * dt;
 
     // Move in small steps so nothing tunnels through thin walls.
+    const bodyH = this.bodyH();
     const steps = Math.max(1, Math.ceil((Math.hypot(this.vx, this.vz) * dt) / 0.2));
     const sdt = dt / steps;
     for (let i = 0; i < steps; i++) {
-      const climb = this.ground ? this.y + STEP : this.y + 0.02;
+      const climb = this.ground ? STEP : 0.02;
       let blocked;
-      [this.x, blocked] = g.slide(this.x, this.z, RADIUS, 0, this.vx * sdt, climb);
+      [this.x, blocked] = g.slide(this.x, this.z, RADIUS, 0, this.vx * sdt, this.y, climb, bodyH);
       if (blocked) this.vx = 0;
-      [this.z, blocked] = g.slide(this.x, this.z, RADIUS, 1, this.vz * sdt, climb);
+      [this.z, blocked] = g.slide(this.x, this.z, RADIUS, 1, this.vz * sdt, this.y, climb, bodyH);
       if (blocked) this.vz = 0;
     }
 
-    const floor = g.floorAt(this.x, this.z, RADIUS - 0.02);
     const wasGround = this.ground;
     this.y += this.vy * dt;
+    // Bump your head on ceilings when jumping indoors.
+    const ceil = g.ceilAt(this.x, this.z, RADIUS - 0.02, this.y - this.vy * dt);
+    if (this.y + bodyH > ceil && this.vy > 0) {
+      this.y = ceil - bodyH;
+      this.vy = 0;
+    }
+    const floor = g.floorAt(this.x, this.z, RADIUS - 0.02, Math.max(this.y, this.y - this.vy * dt));
     if (this.y <= floor) {
-      if (!wasGround && this.vy < -9) this.events.push('land');
+      if (!wasGround && this.vy < -8) {
+        this.events.push('land');
+        this.landT = Math.min(0.35, -this.vy * 0.025);
+      }
       this.y = floor;
       this.vy = 0;
       this.ground = true;
@@ -120,6 +219,29 @@ export class PlayerSim {
       this.ground = false;
     }
     this.speed = Math.hypot(this.vx, this.vz);
+  }
+
+  // Climb onto a ledge in front of you (crates, truck cabs, walls up to chest height).
+  tryMantle() {
+    const g = this.grid;
+    const fx = -Math.sin(this.yaw);
+    const fz = -Math.cos(this.yaw);
+    for (const reach of [0.55, 0.85]) {
+      const ax = this.x + fx * reach;
+      const az = this.z + fz * reach;
+      const top = g.floorAt(ax, az, 0.15, this.y + 2.05);
+      const rise = top - this.y;
+      if (rise <= 1.05 || rise > 2.05) continue; // a normal jump does it, or too high
+      const tx = this.x + fx * (reach + 0.45);
+      const tz = this.z + fz * (reach + 0.45);
+      if (Math.abs(g.floorAt(tx, tz, RADIUS, top) - top) > 0.05) continue;
+      if (g.ceilAt(tx, tz, RADIUS, top) - top < BODY) continue;
+      if (g.ceilAt(this.x, this.z, RADIUS, this.y) < top + 1.2) continue;
+      this.mantle = { t: 0, from: [this.x, this.y, this.z], to: [tx, top, tz] };
+      this.events.push('mantle');
+      return true;
+    }
+    return false;
   }
 
   snapshot() {

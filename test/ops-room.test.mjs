@@ -107,7 +107,7 @@ test('team deathmatch: teams, damage, kills, respawns and winning', () => {
   // Health comes back after a few seconds without being hit.
   if (sam.team !== me.team) {
     host.say({ t: 'hit', id: hid, target: gid, dmg: 70, w: 'ar' });
-    mock.timers.tick(6000);
+    mock.timers.tick(9000);
     host.say({ t: 'hit', id: hid, target: gid, dmg: 70, w: 'ar' });
     assert.ok(guest.last('dmg').hp > 0, 'regenerated before the second hit');
   }

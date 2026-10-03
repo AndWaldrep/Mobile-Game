@@ -47,6 +47,40 @@ function rail(P, len, y, z0) {
 }
 
 const BUILD = {
+  pistol(P, lod) {
+    P.metal.push(box(0.034, 0.034, 0.2, 0, -0.03, -0.06)); // slide
+    if (lod) for (let z = 0.0; z < 0.035; z += 0.008) P.dark.push(box(0.036, 0.022, 0.003, 0, -0.03, z)); // serrations
+    P.metal.push(tubeZ(0.008, 0.02, 0, -0.03, -0.17, 8)); // muzzle
+    P.poly.push(box(0.03, 0.03, 0.16, 0, -0.06, -0.05)); // frame
+    P.poly.push(box(0.03, 0.1, 0.045, 0, -0.11, 0.0, -0.22)); // grip
+    P.poly.push(box(0.02, 0.016, 0.01, 0, -0.085, -0.05)); // trigger guard
+    P.metal.push(box(0.006, 0.01, 0.008, 0, -0.008, -0.14)); // front sight
+    P.metal.push(box(0.022, 0.01, 0.008, 0, -0.008, 0.02)); // rear sight
+    P.dot.push(box(0.003, 0.003, 0.001, 0, -0.008, -0.145));
+    P.mag = [box(0.024, 0.06, 0.036, 0, -0.17, 0.012, -0.22)];
+    return { muzzle: -0.19, eject: [0.02, -0.02, -0.04], muzzleY: -0.03 };
+  },
+  lmg(P, lod) {
+    P.metal.push(box(0.06, 0.07, 0.34, 0, -0.06, -0.02)); // receiver
+    P.dark.push(box(0.064, 0.025, 0.2, 0, -0.012, -0.04)); // feed cover
+    P.poly.push(box(0.064, 0.06, 0.24, 0, -0.065, -0.3)); // handguard
+    P.metal.push(tubeZ(0.014, 0.34, 0, -0.06, -0.58)); // heavy barrel
+    P.metal.push(tubeZ(0.02, 0.06, 0, -0.06, -0.77, 8)); // flash hider
+    P.metal.push(box(0.012, 0.03, 0.01, 0, -0.025, -0.7)); // front sight
+    P.poly.push(box(0.035, 0.11, 0.045, 0, -0.15, 0.08, -0.35)); // grip
+    P.poly.push(box(0.05, 0.09, 0.2, 0, -0.08, 0.26)); // stock
+    P.dark.push(box(0.052, 0.1, 0.02, 0, -0.085, 0.37));
+    if (lod) {
+      rail(P, 0.3, -0.0, 0.08);
+      P.metal.push(box(0.006, 0.006, 0.18, 0.015, -0.11, -0.47)); // bipod legs (folded)
+      P.metal.push(box(0.006, 0.006, 0.18, -0.015, -0.11, -0.47));
+      P.metal.push(box(0.02, 0.012, 0.02, 0.0, 0.0, -0.08)); // carry handle base
+      redDot(P, 0.0, true);
+    } else P.metal.push(box(0.03, 0.03, 0.05, 0, 0.0, 0.0));
+    // Ammo box hanging under the gun
+    P.mag = [box(0.09, 0.1, 0.12, -0.02, -0.16, -0.05)];
+    return { muzzle: -0.82, eject: [0.03, -0.06, -0.02], muzzleY: -0.06 };
+  },
   ar(P, lod) {
     P.metal.push(box(0.05, 0.05, 0.26, 0, -0.045, -0.03)); // upper receiver
     P.metal.push(box(0.046, 0.05, 0.2, 0, -0.092, 0.0)); // lower

@@ -215,7 +215,7 @@ export class Room {
       m.ents.set('bot' + i, this.newEnt({
         id: 'bot' + i, name: names[i % names.length], bot: true, team: counts[0] <= counts[1] ? 0 : 1,
         color: freeColors[i % Math.max(1, freeColors.length)] || COLORS[i % COLORS.length],
-        weapon: ['ar', 'smg', 'ar', 'shotgun', 'smg', 'sniper'][i % 6],
+        weapon: ['ar', 'smg', 'lmg', 'shotgun', 'pistol', 'ar', 'sniper', 'smg'][i % 8],
       }));
     }
     this.state = 'playing';

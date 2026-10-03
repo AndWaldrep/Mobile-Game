@@ -2,7 +2,10 @@
 // Both sticks float: they appear wherever your thumb lands on that side.
 // The aim stick turns faster the further you push it, and also follows small
 // thumb movements directly for fine aim. Dragging on a FIRE button aims too.
-// Keyboard + mouse work as well, for playing or testing on a computer.
+// On a computer: the mouse aims (no click needed), left click fires, right
+// click aims down sights, WASD moves, Shift sprints, Space jumps, C crouches,
+// R reloads and G throws a grenade. The first click or key press captures the
+// mouse so you can turn all the way around.
 
 const MOVE_R = 58;
 const LOOK_R = 60;
@@ -34,9 +37,9 @@ export class Input {
 
     const zone = (el, stick, base, knob, R, follow) => {
       el.addEventListener('pointerdown', (e) => {
-        if (stick.id !== null || !this.enabled) return;
+        if (stick.id !== null || !this.enabled || e.pointerType === 'mouse') return;
         e.preventDefault();
-        this.usedTouch = this.usedTouch || e.pointerType === 'touch';
+        this.touched();
         stick.id = e.pointerId;
         try {
           el.setPointerCapture(e.pointerId);
@@ -157,27 +160,60 @@ export class Input {
       this.keys.add(k);
     });
     window.addEventListener('keyup', (e) => this.keys.delete(e.key.toLowerCase()));
-    const canvas = $('game');
-    canvas.addEventListener('mousedown', (e) => {
-      if (!this.enabled) return;
-      if (document.pointerLockElement !== canvas) {
-        canvas.requestPointerLock?.();
-        return;
-      }
-      if (e.button === 0) this.mouseFire = true;
-      if (e.button === 2) this.mouseAds = true;
-    });
-    window.addEventListener('mouseup', (e) => {
+    this.canvas = $('game');
+    // Only computers with a real mouse get the mouse captured.
+    this.finePointer = !!window.matchMedia?.('(pointer: fine)').matches;
+    document.addEventListener('pointerdown', (e) => e.pointerType === 'touch' && this.touched(), true);
+    // Mouse: clicks anywhere in the game (except on buttons and menus) shoot and aim.
+    document.addEventListener(
+      'pointerdown',
+      (e) => {
+        if (e.pointerType !== 'mouse' || !this.enabled) return;
+        if (e.target.closest('button, input, a, label, #board, #deathScreen, #fsHelp')) return;
+        e.preventDefault();
+        e.stopPropagation();
+        this.usedMouse = true;
+        this.lockMouse();
+        if (e.button === 0) this.mouseFire = true;
+        if (e.button === 2) this.mouseAds = true;
+      },
+      true
+    );
+    window.addEventListener('pointerup', (e) => {
+      if (e.pointerType !== 'mouse') return;
       if (e.button === 0) this.mouseFire = false;
       if (e.button === 2) this.mouseAds = false;
     });
-    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-    document.addEventListener('mousemove', (e) => {
-      if (document.pointerLockElement !== canvas) return;
-      this.mouseX += e.movementX;
-      this.mouseY += e.movementY;
+    document.addEventListener('contextmenu', (e) => this.enabled && e.preventDefault());
+    // Moving the mouse aims, whether or not it's captured yet.
+    document.addEventListener('pointermove', (e) => {
+      if (e.pointerType !== 'mouse' || !this.enabled || this.usedTouch) return;
+      this.mouseX += e.movementX || 0;
+      this.mouseY += e.movementY || 0;
+    });
+    window.addEventListener('keydown', (e) => {
+      if (this.enabled && !this.usedTouch && !(e.target instanceof HTMLInputElement) && e.key !== 'Escape' && e.key !== 'Tab') this.lockMouse();
     });
     window.addEventListener('blur', () => this.release());
+  }
+
+  locked() {
+    return document.pointerLockElement === this.canvas;
+  }
+
+  touched() {
+    this.usedTouch = true;
+    if (this.locked()) document.exitPointerLock?.();
+  }
+
+  // Capture the mouse (browsers only allow this right after a click or key press).
+  lockMouse() {
+    if (this.locked() || this.usedTouch || !this.canvas.requestPointerLock) return;
+    if (!this.finePointer && !this.usedMouse) return;
+    try {
+      const p = this.canvas.requestPointerLock();
+      if (p && p.catch) p.catch(() => {});
+    } catch {}
   }
 
   release() {

@@ -159,6 +159,8 @@ export function elbow(S, H, a, b, hint) {
 }
 
 export const GRIPS = {
+  pistol: { grip: [0, -0.1, 0.0], fore: [-0.02, -0.11, -0.01] },
+  lmg: { grip: [0, -0.14, 0.08], fore: [0, -0.09, -0.3] },
   ar: { grip: [0, -0.14, 0.07], fore: [0, -0.085, -0.27] },
   smg: { grip: [0, -0.13, 0.06], fore: [0, -0.09, -0.22] },
   shotgun: { grip: [0, -0.085, 0.16], fore: [0, -0.085, -0.3] },
@@ -287,9 +289,11 @@ export class Soldier {
     const gun = buildGun(id, false);
     const g = GRIPS[id] || GRIPS.ar;
     // The gun's stock sits in the right shoulder.
-    const gx = 0.13;
-    const gy = -0.02;
-    const gz = -0.3;
+    // Long guns sit with the stock in the right shoulder; a pistol is held out in front.
+    const pistol = id === 'pistol';
+    const gx = pistol ? 0.04 : 0.13;
+    const gy = pistol ? -0.04 : -0.02;
+    const gz = pistol ? -0.48 : -0.3;
     gun.group.position.set(gx, gy, gz);
     this.aim.add(gun.group);
     const hand = (p) => [p[0] + gx, p[1] + gy, p[2] + gz];
@@ -320,6 +324,15 @@ export class Soldier {
     this.flash.position.set(gx, gy + (gun.muzzleY || -0.05), gz + gun.muzzle - 0.04);
     this.flash.visible = false;
     this.aim.add(this.flash);
+    // Scope glint: a sniper aiming at you gives themselves away.
+    this.glint = null;
+    if (id === 'sniper') {
+      this.glint = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: '#ffffff', blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+      this.glint.position.set(gx, gy, gz - 0.2);
+      this.glint.scale.set(0.5, 0.5, 1);
+      this.glint.visible = false;
+      this.aim.add(this.glint);
+    }
   }
 
   setLabel(name, color) {
@@ -377,6 +390,13 @@ export class Soldier {
         const s = 0.35 + Math.random() * 0.3;
         this.flash.scale.set(s, s, 1);
       } else this.flash.visible = false;
+    }
+    if (this.glint) {
+      this.glint.visible = this.deadT < 0 && (v.ads || 0) > 0.8;
+      if (this.glint.visible) {
+        const p = 0.4 + 0.25 * Math.sin(performance.now() / 90);
+        this.glint.scale.set(p, p, 1);
+      }
     }
     if (this.deadT >= 0) {
       // Crumple and fall, then sink out of sight.

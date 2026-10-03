@@ -384,6 +384,44 @@ export function buildWorld(grid, def) {
   const D = grid.d;
   const vis = (x, z) => (x < 0 || z < 0 || x >= W || z >= D ? 0 : grid.vis[z * W + x]);
   const props = { barrel: [], bags: [] };
+  const slabOf = (x, z) => {
+    if (x < 0 || z < 0 || x >= W || z >= D) return null;
+    const k = z * W + x;
+    return grid.shi[k] > grid.slo[k] ? [grid.slo[k], grid.shi[k]] : null;
+  };
+  // Parts of [lo, hi] not covered by any of the given intervals.
+  const minus = (lo, hi, cover) => {
+    let segs = [[lo, hi]];
+    for (const [a, b] of cover) {
+      const next = [];
+      for (const [p, q] of segs) {
+        if (b <= p || a >= q) next.push([p, q]);
+        else {
+          if (a > p) next.push([p, a]);
+          if (b < q) next.push([b, q]);
+        }
+      }
+      segs = next;
+    }
+    return segs.filter(([p, q]) => q - p > 0.01);
+  };
+  const SIDES = (x, z) => [
+    [x + 1, z, [1, 0, 0], [[x + 1, z + 1], [x + 1, z]]],
+    [x - 1, z, [-1, 0, 0], [[x, z], [x, z + 1]]],
+    [x, z + 1, [0, 0, 1], [[x, z + 1], [x + 1, z + 1]]],
+    [x, z - 1, [0, 0, -1], [[x + 1, z], [x, z]]],
+  ];
+  function side(b, n, a, c, lo, hi, shade, darkBottom) {
+    const u0 = n[0] !== 0 ? a[1] : a[0];
+    const u1 = n[0] !== 0 ? c[1] : c[0];
+    quad(
+      b,
+      [[c[0], lo, c[1]], [c[0], hi, c[1]], [a[0], hi, a[1]], [a[0], lo, a[1]]],
+      n,
+      [[u1, lo], [u1, hi], [u0, hi], [u0, lo]],
+      [shade(darkBottom), shade(1.02), shade(1.02), shade(darkBottom)]
+    );
+  }
   for (let z = 0; z < D; z++) {
     for (let x = 0; x < W; x++) {
       const i = z * W + x;
@@ -392,9 +430,12 @@ export function buildWorld(grid, def) {
       if (m.render) props[m.render].push([x, z, grid.col[i]]);
       if (m.under && h <= 0.001) m = def.mats[m.under];
       const tint = grid.tint[i] * (0.94 + (hash(x, z) % 1000) / 1000 * 0.1);
+      const mySlab = slabOf(x, z);
+      // Indoors (under a roof) is a little darker, even without shadows.
+      const indoor = mySlab && mySlab[0] > h ? 0.78 : 1;
       color.set(m.color).multiplyScalar(tint);
       const base = [color.r, color.g, color.b];
-      const shade = (k) => [base[0] * k, base[1] * k, base[2] * k];
+      const shade = (k) => [base[0] * k * indoor, base[1] * k * indoor, base[2] * k * indoor];
       const b = buf(m.tex);
       // Top: darken corners next to taller blocks (soft ambient occlusion).
       const ao = (vx, vz) => {
@@ -410,30 +451,14 @@ export function buildWorld(grid, def) {
         [[x * ts, z * ts], [x * ts, (z + 1) * ts], [(x + 1) * ts, (z + 1) * ts], [(x + 1) * ts, z * ts]],
         [shade(ao(x, z)), shade(ao(x, z + 1)), shade(ao(x + 1, z + 1)), shade(ao(x + 1, z))]
       );
-      // Sides wherever the neighbor is lower.
-      const sides = [
-        [x + 1, z, [1, 0, 0], [[x + 1, z + 1], [x + 1, z]]],
-        [x - 1, z, [-1, 0, 0], [[x, z], [x, z + 1]]],
-        [x, z + 1, [0, 0, 1], [[x, z + 1], [x + 1, z + 1]]],
-        [x, z - 1, [0, 0, -1], [[x + 1, z], [x, z]]],
-      ];
-      sides.forEach(([nx, nz, n, [a, c]], k) => {
+      // Column sides wherever the neighbor doesn't cover them.
+      SIDES(x, z).forEach(([nx, nz, n, [a, c]], k) => {
         const nh = vis(nx, nz);
-        if (nh >= h) return;
-        const lo = nh;
-        const u0 = n[0] !== 0 ? a[1] : a[0];
-        const u1 = n[0] !== 0 ? c[1] : c[0];
-        const dark = lo <= 0.01 && h > 0.3 ? 0.7 : 0.86;
-        // Taller walls get a little lighter toward the top (light bouncing off the ground).
-        quad(
-          b,
-          [[c[0], lo, c[1]], [c[0], h, c[1]], [a[0], h, a[1]], [a[0], lo, a[1]]],
-          n,
-          [[u1, lo], [u1, h], [u0, h], [u0, lo]],
-          [shade(dark), shade(1.02), shade(1.02), shade(dark)]
-        );
-        // Windows and doors on building walls that face open ground.
-        if (m.deco && lo <= 0.01 && nh > -0.1) {
+        const ns = slabOf(nx, nz);
+        const segs = nh < h ? minus(nh, h, ns ? [ns] : []) : [];
+        for (const [lo, hi] of segs) side(b, n, a, c, lo, hi, shade, lo <= 0.01 && hi > 0.3 ? 0.7 : 0.86);
+        // Windows and doors painted on plain building walls that face open ground.
+        if (m.deco && nh <= 0.01 && nh > -0.1 && !ns) {
           const fx = (a[0] + c[0]) / 2;
           const fz = (a[1] + c[1]) / 2;
           const r = hash(x, z, k + 1);
@@ -442,6 +467,38 @@ export function buildWorld(grid, def) {
           else if (m.deco !== 'high' && h >= 3 && r % 4 === 1) decal('window', n, fx, fz, Math.min(h - 1.5, 1.6), Math.min(h - 0.5, 2.6), 0.36);
         }
       });
+      // Floating slab: roof, lintel, or the wall above a window.
+      if (mySlab) {
+        const [slo, shi] = mySlab;
+        const m2 = mats[grid.mat2[i]];
+        color.set(m2.color).multiplyScalar(grid.tint[i]);
+        const b2 = buf(m2.tex);
+        const base2 = [color.r, color.g, color.b];
+        const shade2 = (k2) => [base2[0] * k2, base2[1] * k2, base2[2] * k2];
+        const ts2 = m2.tex === 'concrete' ? 0.5 : 1;
+        quad(
+          b2,
+          [[x, shi, z], [x, shi, z + 1], [x + 1, shi, z + 1], [x + 1, shi, z]],
+          [0, 1, 0],
+          [[x * ts2, z * ts2], [x * ts2, (z + 1) * ts2], [(x + 1) * ts2, (z + 1) * ts2], [(x + 1) * ts2, z * ts2]],
+          [shade2(1), shade2(1), shade2(1), shade2(1)]
+        );
+        // Underside (a ceiling, seen from inside)
+        quad(
+          b2,
+          [[x, slo, z], [x + 1, slo, z], [x + 1, slo, z + 1], [x, slo, z + 1]],
+          [0, -1, 0],
+          [[x, z], [x + 1, z], [x + 1, z + 1], [x, z + 1]],
+          [shade2(0.55), shade2(0.55), shade2(0.55), shade2(0.55)]
+        );
+        SIDES(x, z).forEach(([nx, nz, n, [a, c]]) => {
+          const nh = vis(nx, nz);
+          const ns = slabOf(nx, nz);
+          const cover = [[-1e9, nh]];
+          if (ns) cover.push(ns);
+          for (const [lo, hi] of minus(slo, shi, cover)) side(b2, n, a, c, lo, hi, shade2, 0.8);
+        });
+      }
     }
   }
 
@@ -594,12 +651,16 @@ function buildRoofStuff(grid, def) {
   for (let z = 1; z < grid.d - 1; z++) {
     for (let x = 1; x < grid.w - 1; x++) {
       const i = z * grid.w + x;
-      if (grid.mat[i] !== mi) continue;
-      const h = grid.vis[i];
+      // Props sit on roofs made of this material (slabs) that are surrounded by more roof.
+      if (!(grid.shi[i] > grid.slo[i]) || grid.mat2[i] !== mi) continue;
+      const h = grid.shi[i];
       let inner = true;
-      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (grid.mat[(z + dz) * grid.w + x + dx] !== mi) inner = false;
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const j = (z + dz) * grid.w + x + dx;
+        if (!(grid.shi[j] > grid.slo[j]) || grid.mat2[j] !== mi) inner = false;
+      }
       if (!inner) continue;
-      const r = hash(x, z, 9) % 9;
+      const r = hash(x, z, 9) % 5;
       if (r === 0) {
         const m = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.6, 0.6), ac);
         m.position.set(x + 0.5, h + 0.3, z + 0.5);

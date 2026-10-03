@@ -97,7 +97,7 @@ export class Match {
         if (!e || e.sim) return;
         e.lastFired = sNow;
         this.events.push({ type: 'remoteShot', ent: e, w: msg.w, hx: msg.hx, hy: msg.hy, hz: msg.hz, hit: msg.hit });
-        this.alertBots(e.view.x, e.view.z, e);
+        this.alertBots(e.view.x, e.view.z, e, e.view.y);
         return;
       }
       case 'nade': {
@@ -131,9 +131,9 @@ export class Match {
           victim.hp = 0;
           victim.diedAt = sNow;
           victim.killedBy = msg.killer;
-          if (victim.bot && victim.sim && this.rnd() < 0.3) {
+          if (victim.bot && victim.sim && this.rnd() < (victim.weapon === 'sniper' ? 0.6 : 0.3)) {
             const r = this.rnd();
-            const w = r < 0.35 ? 'ar' : r < 0.65 ? 'smg' : r < 0.85 ? 'shotgun' : 'sniper';
+            const w = r < 0.3 ? 'ar' : r < 0.54 ? 'smg' : r < 0.68 ? 'shotgun' : r < 0.8 ? 'lmg' : r < 0.93 ? 'pistol' : 'sniper';
             this.send({ t: 'botLoadout', id: victim.id, weapon: w });
           }
         }
@@ -185,10 +185,10 @@ export class Match {
     this.events.push({ type: 'spawn', ent: e });
   }
 
-  alertBots(x, z, shooter) {
+  alertBots(x, z, shooter, y = null) {
     for (const b of this.ents.values()) {
       if (!b.ai || !b.alive || b === shooter) continue;
-      if (Math.hypot(b.sim.x - x, b.sim.z - z) < 38) b.ai.hear(x, z);
+      if (Math.hypot(b.sim.x - x, b.sim.z - z) < 38) b.ai.hear(x, z, y);
     }
   }
 
@@ -206,7 +206,7 @@ export class Match {
       const wpn = e.wpn;
       let ctl = isMe ? myCtl || {} : e.ai.think(dt, sim, wpn, { ents: all, mode: this.mode, team: e.team });
       if (!started) ctl = { ads: ctl.ads };
-      sim.update(dt, { ...ctl, speedMul: wpn.w.move });
+      sim.update(dt, { ...ctl, speedMul: wpn.w.move, sprintMul: wpn.w.sprintMul, adsMul: wpn.w.adsMove });
       if (sim.recoil) {
         // The kick settles back down, so holding the trigger climbs a little and then holds steady.
         const back = sim.recoil * (1 - Math.exp(-dt * 6));
@@ -216,9 +216,11 @@ export class Match {
       for (const ev of sim.events) if (isMe) this.events.push({ type: ev });
       sim.events.length = 0;
       const ads = !!ctl.ads && !sim.sprinting;
-      if (wpn.update(dt, ads) === 'reloaded' && isMe) this.events.push({ type: 'reloaded' });
+      if (wpn.update(dt, ads && !sim.mantle, sim.speed, sim.crouch) === 'reloaded' && isMe) this.events.push({ type: 'reloaded' });
       if ((ctl.reload || (wpn.ammo === 0 && wpn.cooldown <= 0)) && wpn.startReload()) this.events.push({ type: 'reload', ent: e, mine: isMe });
-      if (ctl.fire && !sim.sprinting && wpn.canFire()) {
+      // Guns need a moment to come up after sprinting (heavier guns take longer).
+      const ready = !sim.sprinting && !sim.mantle && sim.sinceSprint >= wpn.w.sprintOut;
+      if (ctl.fire && ready && wpn.canFire()) {
         wpn.fire();
         this.fire(e, all);
       } else if (ctl.fire && isMe && wpn.ammo === 0 && wpn.reloading <= 0 && wpn.cooldown <= 0) {
@@ -293,7 +295,7 @@ export class Match {
     sim.pitch += up;
     sim.recoil = (sim.recoil || 0) + up;
     sim.yaw += (this.rnd() - 0.5) * k * 0.6;
-    this.alertBots(sim.x, sim.z, e);
+    this.alertBots(sim.x, sim.z, e, sim.y);
   }
 
   // Enemies within a cone of the crosshair, for gentle aim assist.

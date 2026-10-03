@@ -8,15 +8,16 @@ even mid-match. There's nothing to install, and it runs on free GitHub Pages.
 
 - 1–8 players plus bots (up to 12 soldiers), **Team Deathmatch** or
   **Free-for-all**
-- 2 maps:
-  - **Dust Yard**: a desert market town. A long building with a walkable
-    roof (stairs at both ends, parapets to hide behind), a fountain plaza
-    and a walled courtyard with doors on every side.
-  - **Dockyard**: shipping containers at sunset. A warehouse with a raised
-    catwalk, containers you can climb onto, a two-high stack in the middle
-    and an open quay by the water.
-- 4 loadouts: **Ranger AR**, **Viper SMG**, **Breacher** shotgun,
-  **Longbow** sniper (with a scope). You can switch between lives.
+- 2 maps with buildings you can go inside: doors, windows you can see and
+  shoot through, stairs, and roofs you can stand on.
+  - **Dust Yard**: a desert market town. Four small houses, a long two-level
+    building with inside and outside stairs up to a rooftop with a parapet,
+    a fountain plaza, and a walled courtyard with covered corners.
+  - **Dockyard**: shipping containers at sunset. A roofed warehouse with
+    skylights, high windows and a catwalk; a two-room site office in the
+    middle with stairs up to a rooftop overlooking the yard; containers you
+    can climb; an open quay by the water.
+- 6 loadouts, each with a trade-off (see **Weapons** below). Switch between lives.
 - 2 grenades per life, regenerating health, headshots, spawn protection,
   kill feed, radar (enemies show up when they fire), and a UAV after 3 kills
   in a row
@@ -31,18 +32,47 @@ even mid-match. There's nothing to install, and it runs on free GitHub Pages.
   strafe, crouch, flinch and fall; detailed guns with a red-dot or holo
   sight, scope, pump or bolt action, and a magazine-swap reload
 
+## Weapons
+
+You have 100 health, and it comes back if you avoid getting hit for 5
+seconds. Fights take long enough to react and get to cover: with every
+shot hitting, an automatic needs about half a second, and in real fights
+it's usually a couple of seconds.
+
+| Weapon | Good at | Paying for it with |
+|---|---|---|
+| **M9 Sidearm** (pistol) | Fastest running and aiming; ready the instant you stop sprinting | Weakest: 5+ hits to kill, small magazine |
+| **Viper SMG** | Huge fire rate; quick to aim; you move faster | Damage drops off fast past ~10 m |
+| **Ranger AR** | Good at every range | Best at none |
+| **Bulwark LMG** | 75-round belt; hits hard and stays accurate at range | Slowest automatic to move, aim, and reload; slow to fire after sprinting |
+| **Breacher** (shotgun) | One or two pumps kills up close | Useless past ~15 m; slow reload |
+| **Longbow** (sniper) | One hit to the body or head kills at any range | Slowest to move and aim; the scope sways unless you crouch and hold still; wild if you don't scope in; a scope glint gives you away |
+
+The loadout screen shows each gun's damage, range, fire rate, mobility and
+control as bars.
+
+## Movement
+
+Movement has weight. You speed up and slow down over a moment, and you strafe
+and backpedal slower than you run forward. Sprinting runs out (a small bar
+under your health shows your breath), and your gun needs a moment to come up
+after a sprint. Heavier guns take longer. Crouch mid-sprint to **slide**, and
+jump at a ledge up to about chest height (crates, truck cabs) to **climb** it.
+Your view bobs as you walk, leans when you strafe, and dips when you land.
+
 ## Controls
 
 | | Phone (turn it sideways) | Keyboard + mouse |
 |---|---|---|
 | Move | Left thumb anywhere on the left side (a joystick appears) | WASD |
 | Sprint | Push the left stick all the way up | Shift |
-| Aim / look | Right thumb anywhere on the right side. Push further to turn faster | Mouse (click the game first) |
+| Aim / look | Right thumb anywhere on the right side. Push further to turn faster | Just move the mouse (the first click or key press locks it to the game) |
 | Fire | **FIRE** (either side). Drag on it to aim while shooting | Left click |
 | Aim down sights | **AIM** (tap to toggle) | Right click |
-| Jump / crouch | **⤒** / **⤓** | Space / C |
+| Jump / climb | **⤒** | Space |
+| Crouch / slide | **⤓** (while sprinting to slide) | C |
 | Reload / grenade | **↻** / **💣** | R / G |
-| Scoreboard / menu | Tap the score / **☰** | Tab / Esc |
+| Scoreboard / menu | Tap the score / **☰** | Tab / Esc (letting go of the mouse also opens the menu) |
 | Full screen | **⛶** (top right) | |
 
 **Auto-fire** (on by default for touch) shoots when your crosshair is on an
@@ -115,8 +145,11 @@ maps, in both modes.
 - Each phone moves its own soldier and works out what its own bullets hit, so
   aiming feels instant. The room applies the damage and announces kills. The
   host's phone also runs the bots (`bot.js`).
-- Maps are built from boxes on a 1 m grid (`maps.js`). That keeps collision,
-  bullets, line of sight and bot pathfinding simple and fast (`grid.js`). To
+- Maps are built on a 1 m grid (`maps.js`): each cell is a solid column plus
+  an optional floating "slab" (a roof, a door lintel, or the wall above a
+  window). That's enough for real buildings while keeping collision,
+  bullets, line of sight and bot pathfinding simple and fast (`grid.js`).
+  Bots path in and out of doors and up stairs onto roofs. To
   make a new map, add an entry to `maps.js`; the tests check it automatically.
 - `world.js` builds the 3D level from the grid; `soldier.js`, `guns.js` and
   `viewmodel.js` are the people and weapons, all built from simple shapes and
