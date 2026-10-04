@@ -7,7 +7,7 @@
 // A connection is any object with send(msg) and close().
 
 import { getGrid, MAP_IDS } from './maps.js';
-import { WEAPON_IDS, MAX_HIT } from './weapons.js';
+import { WEAPON_IDS, MAX_HIT, classOf } from './weapons.js';
 import { hpAt, MAX_HP, EYE } from './player.js';
 
 const MAX_PLAYERS = 8;
@@ -340,7 +340,9 @@ export class Room {
     if (!target.alive || now < target.protectUntil) return;
     if (shooter === target && !nade) return;
     if (m.mode === 'tdm' && shooter !== target && shooter.team === target.team) return;
-    const dmg = Math.max(0, Math.min(MAX_HIT, num(msg.dmg)));
+    let dmg = Math.max(0, Math.min(MAX_HIT, num(msg.dmg)));
+    // The Heavy class's body armor soaks up part of every bullet (not grenades).
+    if (!nade) dmg *= classOf(target.weapon).armor || 1;
     if (!dmg) return;
     target.hp = Math.max(0, hpAt(target.hp, target.lastHit, now) - dmg);
     target.lastHit = now;
@@ -454,7 +456,7 @@ export class Room {
           if (!e || !e.alive || num(s.l) !== e.life) continue;
           const clean = {
             id: s.id, l: e.life, ts: num(s.ts), x: num(s.x), y: num(s.y), z: num(s.z), yaw: num(s.yaw), pitch: num(s.pitch),
-            cr: num(s.cr), mv: num(s.mv), ads: num(s.ads), gr: num(s.gr),
+            cr: num(s.cr), mv: num(s.mv), ads: num(s.ads), gr: num(s.gr), sec: num(s.sec) ? 1 : 0,
           };
           e.x = clean.x;
           e.y = clean.y;

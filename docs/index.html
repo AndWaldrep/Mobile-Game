@@ -54,7 +54,7 @@
         </div>
       </div>
       <div class="col">
-        <div class="label">Loadout</div>
+        <div class="label">Class</div>
         <div id="loadout" class="loadout"></div>
         <details class="controlsBox">
           <summary>⚙️ Controls &amp; aim settings</summary>
@@ -65,8 +65,8 @@
           <label class="toggle"><input id="leftFireInput" type="checkbox"> Left-side FIRE button</label>
           <div class="setting"><span>Button size</span><div class="seg" data-pref="btn"><button data-v="0.85">S</button><button data-v="1">M</button><button data-v="1.15">L</button></div></div>
           <div class="setting"><span>Graphics</span><div class="seg" data-pref="gfx"><button data-v="auto">Auto</button><button data-v="high">High</button><button data-v="low">Low</button></div></div>
-          <p class="hint">Phone: left thumb moves (push all the way up to sprint, tap ⤓ while sprinting to slide), right thumb aims, drag on FIRE to aim while shooting. Jump at a ledge to climb it.</p>
-          <p class="hint">Computer: mouse aims, left click fires, right click aims down sights, WASD moves, Shift sprints, Space jumps/climbs, C crouches/slides, R reloads, G grenade, Esc menu.</p>
+          <p class="hint">Phone: left thumb moves (push all the way up to sprint, tap ⤓ while sprinting to slide), right thumb aims, drag on FIRE to aim while shooting, ⇄ switches to your sidearm. Jump at a ledge to climb it.</p>
+          <p class="hint">Computer: mouse aims, left click fires, right click aims down sights, WASD moves, Shift sprints, Space jumps/climbs, C crouches/slides, R reloads, G grenade, 1/2 or mouse wheel switches to your sidearm, H shows the controls, Esc menu.</p>
         </details>
         <p class="hint">Turn your phone sideways to play · <a href="https://andwaldrep.github.io/AppProduction/">Kart Clash 🏁</a></p>
       </div>
@@ -91,7 +91,7 @@
         </div>
         <div class="label">Squad</div>
         <ul id="playerList" class="players"></ul>
-        <div class="label">Your loadout</div>
+        <div class="label">Your class</div>
         <div id="lobbyLoadout" class="loadout compact"></div>
       </div>
       <div class="col">
@@ -152,6 +152,15 @@
       <button id="btnCrouch" class="ctl" aria-label="Crouch"><svg viewBox="0 0 24 24"><path d="M5 9l7 7 7-7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       <button id="btnReload" class="ctl" aria-label="Reload"><svg viewBox="0 0 24 24"><path d="M19 12a7 7 0 1 1-2.1-5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><path d="M18 3v5h-5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       <button id="btnNade" class="ctl" aria-label="Grenade"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="14" rx="6" ry="7" fill="currentColor"/><rect x="10" y="4" width="5" height="4" rx="1" fill="currentColor"/><path d="M15 6c3 0 4 2 4 4" fill="none" stroke="currentColor" stroke-width="1.8"/></svg><span id="nadeCount">2</span></button>
+      <button id="btnSwap" class="ctl" aria-label="Switch weapon"><svg viewBox="0 0 24 24"><path d="M4 8h14l-3.5-3.5M20 16H6l3.5 3.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span id="swapNum">2</span></button>
+    </div>
+
+    <div id="tutorial" hidden>
+      <div class="tutHead"><b>Controls</b><button id="tutClose" aria-label="Hide controls">✕</button></div>
+      <div id="tutClass"></div>
+      <div id="tutBody"></div>
+      <div id="tutFoot"></div>
+      <i id="tutBar"></i>
     </div>
 
     <div id="scope" hidden></div>
@@ -191,8 +200,9 @@
       <div class="deathCard">
         <div id="killedBy">Killed by —</div>
         <div id="respawnIn">Respawning…</div>
-        <div class="label">Next life loadout</div>
+        <div class="label">Next life class</div>
         <div id="deathLoadout" class="loadout compact"></div>
+        <button id="deathMenuBtn" class="small ghost">⚙️ Settings</button>
       </div>
     </div>
 
@@ -210,6 +220,7 @@
           <div class="setting"><span>Graphics</span><div class="seg" data-pref="gfx"><button data-v="auto">Auto</button><button data-v="high">High</button><button data-v="low">Low</button></div></div>
           <div class="btnRow">
             <button id="resumeBtn" class="big primary">Back to the fight</button>
+            <button id="tutBtn" class="small ghost">Show controls</button>
             <button id="endBtn" class="small ghost">End match</button>
             <button id="quitBtn" class="small ghost">Leave</button>
           </div>

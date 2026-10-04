@@ -194,7 +194,7 @@ export class Match {
 
   // ------------------------------------------------------------ simulation
 
-  // myCtl: { mx, mz, sprint, jump, crouch, ads, fire, reload, nade }; aim is set on me.sim directly.
+  // myCtl: { mx, mz, sprint, jump, crouch, ads, fire, reload, nade, swap }; aim is set on me.sim directly.
   update(dt, myCtl) {
     const sNow = this.now();
     const started = sNow >= this.startAt;
@@ -205,8 +205,10 @@ export class Match {
       const sim = e.sim;
       const wpn = e.wpn;
       let ctl = isMe ? myCtl || {} : e.ai.think(dt, sim, wpn, { ents: all, mode: this.mode, team: e.team });
-      if (!started) ctl = { ads: ctl.ads };
-      sim.update(dt, { ...ctl, speedMul: wpn.w.move, sprintMul: wpn.w.sprintMul, adsMul: wpn.w.adsMove });
+      if (!started) ctl = { ads: ctl.ads, swap: ctl.swap };
+      // Switch between the primary and the sidearm (swap: 0 or 1 for a slot, -1 for the other one).
+      if (ctl.swap != null && wpn.swap(ctl.swap === -1 ? 1 - wpn.cur : ctl.swap)) this.events.push({ type: 'swap', ent: e, mine: isMe, w: wpn.w.id });
+      sim.update(dt, { ...ctl, speedMul: wpn.w.move, sprintMul: wpn.w.sprintMul, adsMul: wpn.w.adsMove, stamina: wpn.cls.stamina });
       if (sim.recoil) {
         // The kick settles back down, so holding the trigger climbs a little and then holds steady.
         const back = sim.recoil * (1 - Math.exp(-dt * 6));
@@ -235,6 +237,7 @@ export class Match {
       }
       e.view = sim.snapshot();
       e.view.ads = wpn.adsT;
+      e.view.sec = wpn.cur;
     }
 
     // Grenades
@@ -263,7 +266,7 @@ export class Match {
         const v = e.view;
         out.push({
           id: e.id, l: e.life, ts: Math.round(sNow), x: r2(v.x), y: r2(v.y), z: r2(v.z), yaw: r3(v.yaw), pitch: r3(v.pitch),
-          cr: r2(v.cr), mv: r2(v.mv), ads: r2(v.ads), gr: v.gr,
+          cr: r2(v.cr), mv: r2(v.mv), ads: r2(v.ads), gr: v.gr, sec: v.sec,
         });
       }
       if (out.length) this.send({ t: 's', e: out });

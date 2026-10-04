@@ -2,7 +2,8 @@
 // Sounds from far away are quieter and duller.
 
 const GUNS = {
-  pistol: { f: 2200, dur: 0.12, vol: 0.4, thump: 140 },
+  pistol: { f: 1500, dur: 0.2, vol: 0.6, thump: 85 },
+  sidearm: { f: 2200, dur: 0.12, vol: 0.4, thump: 140 },
   lmg: { f: 1100, dur: 0.2, vol: 0.6, thump: 70 },
   ar: { f: 1400, dur: 0.16, vol: 0.5, thump: 90 },
   smg: { f: 1900, dur: 0.11, vol: 0.4, thump: 120 },
@@ -140,6 +141,7 @@ class Sfx {
   count() { this.tone(660, 0.18, 'square', 0.15); }
   go() { this.tone(990, 0.4, 'square', 0.18); }
   bounce(dist) { this.tone(1500, 0.05, 'triangle', 0.12 / (1 + dist * 0.1)); }
+  swap() { this.noise(0.05, 0.18, 1800, 'bandpass', 0, 2); this.tone(700, 0.03, 'square', 0.06, null, 0.12); }
   pin() { this.tone(2400, 0.04, 'square', 0.08); this.noise(0.08, 0.15, 1500, 'bandpass', 0.06); }
   boom(dist) {
     const fall = 1 / (1 + dist * 0.04);

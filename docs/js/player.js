@@ -78,7 +78,8 @@ export class PlayerSim {
     return BODY + (BODY_CROUCH - BODY) * Math.min(1, this.crouch * 1.4);
   }
 
-  // ctl: { mx, mz } stick (-1..1, mz < 0 is forward), sprint, jump, crouch, ads, speedMul, adsMul
+  // ctl: { mx, mz } stick (-1..1, mz < 0 is forward), sprint, jump, crouch, ads, speedMul, adsMul,
+  // stamina (how many times longer than normal you can sprint)
   update(dt, ctl) {
     const g = this.grid;
     // Climbing onto a ledge takes over until it's done.
@@ -130,13 +131,13 @@ export class PlayerSim {
     if (this.tired && this.stamina > 0.3) this.tired = false;
     this.sprinting = wantSprint && !this.tired;
     if (this.sprinting) {
-      this.stamina = Math.max(0, this.stamina - dt / 6);
+      this.stamina = Math.max(0, this.stamina - dt / (6 * (ctl.stamina || 1)));
       this.restT = 0;
       this.sinceSprint = 0;
     } else {
       this.sinceSprint += dt;
       this.restT += dt;
-      if (this.restT > 0.9) this.stamina = Math.min(1, this.stamina + dt / 4);
+      if (this.restT > 0.9) this.stamina = Math.min(1, this.stamina + (dt / 4) * Math.sqrt(ctl.stamina || 1));
     }
 
     let top = WALK;

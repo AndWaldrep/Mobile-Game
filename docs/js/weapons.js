@@ -1,4 +1,8 @@
-// Weapon stats and the per-soldier weapon state (ammo, reload, recoil, spread).
+// Weapon stats, classes, and the per-soldier weapon state (ammo, reload, recoil, spread).
+//
+// Picking a loadout picks a class: a primary weapon plus a class skill (see
+// CLASSES). Everyone also carries a sidearm pistol as a secondary weapon. The
+// Gunslinger's primary is a hand cannon that hits much harder than that sidearm.
 //
 // Every gun trades something away. Light guns let you run faster and aim
 // quicker but take more hits to kill; heavy guns hit hard or hold lots of
@@ -10,33 +14,33 @@
 export const WEAPONS = {
   pistol: {
     id: 'pistol',
-    name: 'M9 Sidearm',
-    icon: '🔫',
-    blurb: 'Fastest on your feet and quickest to aim. Takes 5+ hits.',
+    name: '.50 Hand Cannon',
+    icon: '🤠',
+    blurb: 'A heavy pistol: 4 body shots, fastest on your feet and quickest to aim.',
     auto: false,
-    rpm: 380,
-    dmg: 20,
-    dmgFar: 12,
-    near: 10,
-    far: 32,
-    headMul: 1.6,
+    rpm: 300,
+    dmg: 30,
+    dmgFar: 19,
+    near: 14,
+    far: 40,
+    headMul: 1.7,
     pellets: 1,
-    mag: 12,
-    reload: 1.3,
+    mag: 8,
+    reload: 1.5,
     hip: 0.03,
-    ads: 0.012,
-    bloom: 0.01,
-    maxBloom: 0.03,
+    ads: 0.01,
+    bloom: 0.014,
+    maxBloom: 0.04,
     movePenalty: 0.2,
-    recoil: 0.02,
-    adsFov: 0.85,
+    recoil: 0.034,
+    adsFov: 0.82,
     move: 1.14,
     sprintMul: 1.06,
     adsMove: 1.25,
     adsTime: 0.12,
     sprintOut: 0.08,
-    autoRange: 26,
-    stats: { damage: 3, range: 3, rate: 5, mobility: 10, control: 8 },
+    autoRange: 30,
+    stats: { damage: 6, range: 4, rate: 4, mobility: 10, control: 6 },
   },
   smg: {
     id: 'smg',
@@ -160,7 +164,7 @@ export const WEAPONS = {
   },
   sniper: {
     id: 'sniper',
-    name: 'Longbow',
+    name: 'Sniper',
     icon: '🎯',
     blurb: 'One hit kills. Slowest to move and aim, sways unless you hold still, and your scope glints.',
     auto: false,
@@ -191,10 +195,58 @@ export const WEAPONS = {
     sway: true,
     stats: { damage: 10, range: 10, rate: 1, mobility: 1, control: 3 },
   },
+  // The backup pistol everyone carries. Not a loadout choice of its own.
+  sidearm: {
+    id: 'sidearm',
+    name: 'M9 Sidearm',
+    icon: '🔫',
+    secondary: true,
+    auto: false,
+    rpm: 380,
+    dmg: 16,
+    dmgFar: 10,
+    near: 10,
+    far: 30,
+    headMul: 1.6,
+    pellets: 1,
+    mag: 12,
+    reload: 1.3,
+    hip: 0.03,
+    ads: 0.012,
+    bloom: 0.01,
+    maxBloom: 0.03,
+    movePenalty: 0.2,
+    recoil: 0.02,
+    adsFov: 0.85,
+    move: 1.1,
+    sprintMul: 1.04,
+    adsMove: 1.2,
+    adsTime: 0.12,
+    sprintOut: 0.08,
+    autoRange: 24,
+    stats: { damage: 2, range: 3, rate: 5, mobility: 9, control: 8 },
+  },
 };
-export const WEAPON_IDS = Object.keys(WEAPONS);
+// Loadouts you can pick (the sidearm comes with all of them).
+export const WEAPON_IDS = Object.keys(WEAPONS).filter((id) => !WEAPONS[id].secondary);
+export const SECONDARY = 'sidearm';
+
+// Each loadout is a class with its own skill. Keyed by the primary weapon's id,
+// which is what the lobby and the network already send around as "weapon".
+export const CLASSES = {
+  pistol: { name: 'Gunslinger', skill: 'Quick Draw', desc: 'Hand cannon instead of a long gun, and swaps weapons twice as fast.', swapMul: 0.5 },
+  smg: { name: 'Scout', skill: 'Marathon', desc: 'Sprints twice as long and catches their breath faster.', stamina: 2 },
+  ar: { name: 'Assault', skill: 'Quick Hands', desc: 'Reloads 30% faster.', reloadMul: 0.7 },
+  lmg: { name: 'Heavy', skill: 'Body Armor', desc: 'Takes 20% less damage from bullets.', armor: 0.8 },
+  shotgun: { name: 'Grenadier', skill: 'Bandolier', desc: 'Starts with 4 grenades instead of 2.', nades: 4 },
+  sniper: { name: 'Marksman', skill: 'Ghost', desc: "Firing doesn't put you on the enemy radar.", quiet: true },
+};
+export function classOf(id) {
+  return CLASSES[id] || CLASSES.ar;
+}
 
 export const NADE = { fuse: 2.2, radius: 6, dmg: 110, speed: 15, count: 2 };
+export const SWAP_TIME = 0.45; // seconds to put one gun away and raise the other
 export const MAX_HIT = 210; // most damage one message can do (sniper headshot)
 
 export function damageAt(w, dist) {
@@ -208,17 +260,37 @@ export class WeaponState {
     this.set(id);
   }
 
+  // id: the class (primary weapon). Slot 0 is the primary, slot 1 the sidearm.
   set(id) {
-    this.w = WEAPONS[id] || WEAPONS.ar;
+    this.cls = classOf(id);
+    this.slots = [WEAPONS[id] && !WEAPONS[id].secondary ? WEAPONS[id] : WEAPONS.ar, WEAPONS[SECONDARY]].map((w) => ({ w, ammo: w.mag }));
+    this.cur = 0;
+    this.w = this.slots[0].w;
     this.ammo = this.w.mag;
     this.reloading = 0;
+    this.reloadTotal = this.w.reload;
     this.cooldown = 0;
     this.bloomV = 0;
     this.adsT = 0; // 0 hip .. 1 aimed
     this.kick = 0; // visual recoil
-    this.nades = NADE.count;
+    this.nades = this.cls.nades || NADE.count;
     this.sinceShot = 9;
     this.moveSpread = 0;
+  }
+
+  // Switch to slot `to` (0 primary, 1 sidearm). Each gun keeps its own ammo; a reload in progress is dropped.
+  swap(to = 1 - this.cur) {
+    if (to === this.cur || !this.slots[to]) return false;
+    this.slots[this.cur].ammo = this.ammo;
+    this.cur = to;
+    this.w = this.slots[to].w;
+    this.ammo = this.slots[to].ammo;
+    this.reloading = 0;
+    this.bloomV = 0;
+    this.adsT = 0;
+    this.kick = 0;
+    this.cooldown = Math.max(this.cooldown, SWAP_TIME * (this.cls.swapMul || 1));
+    return true;
   }
 
   get interval() {
@@ -248,6 +320,7 @@ export class WeaponState {
       if (this.reloading <= 0) {
         this.reloading = 0;
         this.ammo = w.mag;
+        this.slots[this.cur].ammo = this.ammo;
         return 'reloaded';
       }
     }
@@ -271,7 +344,7 @@ export class WeaponState {
 
   startReload() {
     if (this.reloading > 0 || this.ammo >= this.w.mag) return false;
-    this.reloading = this.w.reload;
+    this.reloading = this.reloadTotal = this.w.reload * (this.cls.reloadMul || 1);
     return true;
   }
 }

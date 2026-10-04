@@ -46,20 +46,31 @@ function rail(P, len, y, z0) {
   for (let z = z0 - 0.01; z > z0 - len; z -= 0.016) P.metal.push(box(0.034, 0.006, 0.007, 0, y + 0.006, z));
 }
 
+// A pistol. `big` is the Gunslinger's hand cannon: longer, chunkier slide with a compensator.
+function pistolBody(P, lod, big) {
+  const k = big ? 1.22 : 1;
+  const len = 0.2 * (big ? 1.25 : 1);
+  P.metal.push(box(0.034 * k, 0.034 * k, len, 0, -0.03, -0.06 - (len - 0.2) / 2)); // slide
+  if (lod) for (let z = 0.0; z < 0.035; z += 0.008) P.dark.push(box(0.036 * k, 0.022, 0.003, 0, -0.03, z)); // serrations
+  const front = -0.06 - (len - 0.2) / 2 - len / 2;
+  if (big) {
+    P.dark.push(box(0.044, 0.04, 0.05, 0, -0.03, front - 0.02)); // compensator
+    for (let i = 0; i < 3; i++) P.metal.push(box(0.046, 0.004, 0.006, 0, -0.012, front - 0.005 - i * 0.014)); // ports
+    P.metal.push(tubeZ(0.01, 0.02, 0, -0.03, front - 0.05, 8));
+  } else P.metal.push(tubeZ(0.008, 0.02, 0, -0.03, -0.17, 8)); // muzzle
+  P.poly.push(box(0.03 * k, 0.03, 0.16 * (big ? 1.15 : 1), 0, -0.06, -0.05)); // frame
+  P.poly.push(box(0.03 * k, 0.1 * (big ? 1.1 : 1), 0.045 * k, 0, -0.11, 0.0, -0.22)); // grip
+  P.poly.push(box(0.02, 0.016, 0.01, 0, -0.085, -0.05)); // trigger guard
+  P.metal.push(box(0.006, 0.01, 0.008, 0, -0.008, front + 0.02)); // front sight
+  P.metal.push(box(0.022, 0.01, 0.008, 0, -0.008, 0.02)); // rear sight
+  P.dot.push(box(0.003, 0.003, 0.001, 0, -0.008, front + 0.015));
+  P.mag = [box(0.024 * k, 0.06, 0.036 * k, 0, -0.17, 0.012, -0.22)];
+  return { muzzle: big ? front - 0.07 : -0.19, eject: [0.02, -0.02, -0.04], muzzleY: -0.03 };
+}
+
 const BUILD = {
-  pistol(P, lod) {
-    P.metal.push(box(0.034, 0.034, 0.2, 0, -0.03, -0.06)); // slide
-    if (lod) for (let z = 0.0; z < 0.035; z += 0.008) P.dark.push(box(0.036, 0.022, 0.003, 0, -0.03, z)); // serrations
-    P.metal.push(tubeZ(0.008, 0.02, 0, -0.03, -0.17, 8)); // muzzle
-    P.poly.push(box(0.03, 0.03, 0.16, 0, -0.06, -0.05)); // frame
-    P.poly.push(box(0.03, 0.1, 0.045, 0, -0.11, 0.0, -0.22)); // grip
-    P.poly.push(box(0.02, 0.016, 0.01, 0, -0.085, -0.05)); // trigger guard
-    P.metal.push(box(0.006, 0.01, 0.008, 0, -0.008, -0.14)); // front sight
-    P.metal.push(box(0.022, 0.01, 0.008, 0, -0.008, 0.02)); // rear sight
-    P.dot.push(box(0.003, 0.003, 0.001, 0, -0.008, -0.145));
-    P.mag = [box(0.024, 0.06, 0.036, 0, -0.17, 0.012, -0.22)];
-    return { muzzle: -0.19, eject: [0.02, -0.02, -0.04], muzzleY: -0.03 };
-  },
+  pistol: (P, lod) => pistolBody(P, lod, true),
+  sidearm: (P, lod) => pistolBody(P, lod, false),
   lmg(P, lod) {
     P.metal.push(box(0.06, 0.07, 0.34, 0, -0.06, -0.02)); // receiver
     P.dark.push(box(0.064, 0.025, 0.2, 0, -0.012, -0.04)); // feed cover

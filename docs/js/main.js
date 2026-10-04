@@ -9,7 +9,7 @@ import { Input } from './input.js';
 import { Net } from './net.js';
 import { sfx } from './audio.js';
 import { Bot } from './bot.js';
-import { WEAPONS, WEAPON_IDS } from './weapons.js';
+import { WEAPONS, WEAPON_IDS, SECONDARY, classOf } from './weapons.js';
 import { LIMITS, COLORS, RESPAWN_MS } from './room.js';
 import { hpAt, MAX_HP, wrapAngle } from './player.js';
 import { aimTarget } from './combat.js';
@@ -246,8 +246,13 @@ function renderLoadouts() {
       const bars = Object.entries(W.stats)
         .map(([k, v]) => `<span class="stat"><i>${STAT_NAMES[k]}</i><b style="width:${v * 10}%"></b></span>`)
         .join('');
+      const C = classOf(w);
       return `<button data-weapon="${w}" class="${w === app.profile.weapon ? 'selected' : ''}">
-        <span class="wicon">${W.icon}</span><span class="wname">${W.name}</span>${compact ? '' : `<small>${W.blurb}</small><span class="stats">${bars}</span>`}</button>`;
+        <span class="wicon">${W.icon}</span><span class="wclass">${C.name}</span><span class="wname">${W.name}</span>${
+          compact
+            ? ''
+            : `<span class="wskill"><b>${C.skill}:</b> ${C.desc}</span><small>${W.blurb} + M9 sidearm.</small><span class="stats">${bars}</span>`
+        }</button>`;
     }).join('');
   }
 }
@@ -258,7 +263,8 @@ document.addEventListener('click', (e) => {
   saveProfile();
   renderLoadouts();
   if (app.room) net.send({ t: 'loadout', weapon: app.profile.weapon });
-  if (app.match) toast(`${WEAPONS[app.profile.weapon].name} next life`);
+  const C = classOf(app.profile.weapon);
+  if (app.match) toast(`${C.name} next life (${C.skill}: ${C.desc})`, 3500);
 });
 renderLoadouts();
 
@@ -541,9 +547,15 @@ $('resumeBtn').onclick = () => {
   closeBoard();
   input.lockMouse();
 };
+$('deathMenuBtn').onclick = () => openBoard(true);
+$('tutBtn').onclick = () => {
+  closeBoard();
+  showTutorial(true);
+  input.lockMouse();
+};
 // On a computer, letting go of the mouse (Esc) pauses into the menu.
 document.addEventListener('pointerlockchange', () => {
-  if (!input.locked() && app.match && !app.match.over && !app.boardOpen && input.enabled && !input.usedTouch) openBoard(true);
+  if (!input.locked() && app.match && !app.match.over && !app.boardOpen && input.enabled && !input.usedTouch && !input.mouseFree) openBoard(true);
 });
 $('quitBtn').onclick = () => {
   closeBoard();
@@ -687,6 +699,9 @@ const hud = {
   fovK: 1,
   landEvents: [],
   swayT: 0,
+  tutUntil: 0,
+  tutPinned: false,
+  tutMode: '',
   feed: [],
   hitT: 0,
   hitKill: false,
@@ -713,7 +728,7 @@ function beginMatch(msg) {
   const me = m.me;
   if (me) {
     if (AUTOPILOT) me.ai = new Bot(m.grid, me.id, 2, 99);
-    viewModel.setWeapon(me.weapon, me.team === undefined || m.mode !== 'tdm' ? UNIFORM.ffa : UNIFORM.friend);
+    viewModel.setWeapon(me.weapon, mySleeve());
   }
   Object.assign(hud, { feed: [], hitT: 0, shake: 0, camY: null, lastCount: null, goShown: false, uavUntil: 0 });
   $('killfeed').innerHTML = '';
@@ -722,8 +737,18 @@ function beginMatch(msg) {
   $('scoreTop').classList.toggle('ffa', m.mode === 'ffa');
   input.read(0); // drop any queued presses
   show('match');
+  input.freeMouse(!!me && !me.alive);
   if (!input.usedTouch) input.lockMouse();
+  // Show which keys do what for the first 20 seconds of the fight.
+  hud.tutUntil = Math.max(m.startAt, net.serverNow()) + TUTORIAL_MS;
+  hud.tutPinned = false;
   requestWakeLock();
+}
+
+// The sleeve color of your own arms in first person.
+function mySleeve() {
+  const m = app.match;
+  return !m || m.me?.team === undefined || m.mode !== 'tdm' ? UNIFORM.ffa : UNIFORM.friend;
 }
 
 function addSoldier(e) {
@@ -753,6 +778,8 @@ function endMatchLocal() {
   fx.clear();
   app.match = null;
   closeBoard();
+  input.freeMouse(false);
+  $('tutorial').hidden = true;
   $('deathScreen').hidden = true;
   $('scope').hidden = true;
   releaseWakeLock();
@@ -868,7 +895,9 @@ function handleEvents() {
       case 'spawn': {
         if (ev.ent.id === app.myId) {
           $('deathScreen').hidden = true;
-          viewModel.setWeapon(ev.ent.weapon, m.mode === 'tdm' ? UNIFORM.friend : UNIFORM.ffa);
+          // Back in the fight: the next click or key captures the mouse again.
+          input.freeMouse(false);
+          viewModel.setWeapon(ev.ent.weapon, mySleeve());
           hud.camY = null;
           input.crouch = false;
           input.ads = false;
@@ -896,6 +925,12 @@ function handleEvents() {
       }
       case 'reload':
         if (ev.mine) sfx.reload();
+        break;
+      case 'swap':
+        if (ev.mine) {
+          viewModel.setWeapon(ev.w, mySleeve());
+          sfx.swap();
+        }
         break;
       case 'reloaded':
         sfx.reloaded();
@@ -969,7 +1004,8 @@ function onKill(ev, now) {
   if (victim && victim.id === app.myId) {
     sfx.die();
     navigator.vibrate?.(200);
-    input.release();
+    // Let go of the mouse so you can pick a class or open the settings while you wait.
+    input.freeMouse(true);
     $('deathScreen').hidden = false;
     $('killedBy').innerHTML = killer && killer !== victim ? `Killed by ${name(killer)} ${ev.head ? '🎯' : ''}` : 'You blew yourself up 💣';
     renderLoadouts();
@@ -1039,7 +1075,7 @@ function drawMinimap(m, me, now) {
   for (const e of m.list()) {
     if (e.id === app.myId || !e.alive) continue;
     const friendly = m.mode === 'tdm' && e.team === me.team;
-    const loud = now - e.lastFired < 1800;
+    const loud = now - e.lastFired < 1800 && !classOf(e.weapon).quiet;
     if (!friendly && !loud && !uav) continue;
     ctx.beginPath();
     ctx.arc(e.view.x * S, e.view.z * S, 4.5, 0, Math.PI * 2);
@@ -1149,6 +1185,7 @@ function updateMatch(dt, now) {
     const e = m.ents.get(id);
     if (!e) continue;
     if (e.alive && s.deadT >= 0 && s.deadT > 50) s.revive();
+    if (e.alive) s.setWeapon(e.view.sec ? SECONDARY : e.weapon);
     s.pose(e.view, dt);
     // Footsteps of nearby soldiers
     if (e.alive && e.view.mv > 2.5 && e.view.gr) {
@@ -1206,7 +1243,7 @@ function updateCamera(me, dt, sNow) {
     viewModel.update(dt, {
       ads: wpn.adsT,
       kick: wpn.kick,
-      reload: wpn.reloading > 0 ? 1 - wpn.reloading / wpn.w.reload : -1,
+      reload: wpn.reloading > 0 ? 1 - wpn.reloading / wpn.reloadTotal : -1,
       sprint: sim.sprinting,
       speed: sim.ground ? sim.speed : 0,
       dyaw: Math.max(-3, Math.min(3, dyaw * 0.1)),
@@ -1297,8 +1334,12 @@ function updateHud(me, dt, sNow) {
     $('ammo').classList.toggle('low', wpn.ammo <= Math.ceil(wpn.w.mag * 0.25));
     $('nadeCount').textContent = wpn.nades;
     $('btnNade').classList.toggle('empty', wpn.nades <= 0);
+    $('swapNum').textContent = wpn.cur ? '1' : '2';
+    $('btnSwap').classList.toggle('sec', wpn.cur === 1);
     const hint = $('hintCenter');
-    const text = !me.alive ? '' : wpn.reloading > 0 ? 'Reloading…' : wpn.ammo === 0 ? 'Tap ↻ to reload' : sNow < (me.protectUntil || 0) ? 'Spawn protection' : '';
+    const touch = input.usedTouch || !input.finePointer;
+    const empty = touch ? 'Tap ↻ to reload or ⇄ for your sidearm' : 'R to reload · 2 for your sidearm';
+    const text = !me.alive ? '' : wpn.reloading > 0 ? 'Reloading…' : wpn.ammo === 0 ? empty : sNow < (me.protectUntil || 0) ? 'Spawn protection' : '';
     if (hint.textContent !== text) hint.textContent = text;
     // Crosshair spreads with inaccuracy and hides when aiming down sights.
     const spreadPx = (Math.tan(wpn.spread()) / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) * (window.innerHeight / 2);
@@ -1328,6 +1369,7 @@ function updateHud(me, dt, sNow) {
     return true;
   });
 
+  updateTutorial(me, sNow);
   if (!me.alive && !$('deathScreen').hidden) {
     const left = (me.diedAt || sNow) + RESPAWN_MS - sNow;
     $('respawnIn').textContent = me.away ? 'Rejoining…' : left > 0 ? `Respawning in ${Math.ceil(left / 1000)}…` : 'Respawning…';
@@ -1345,6 +1387,73 @@ function updateHud(me, dt, sNow) {
     }
   }
 }
+// ------------------------------------------------------------------ controls guide
+
+const TUTORIAL_MS = 20000;
+const TUT_KEYS = [
+  ['Mouse', 'Aim'],
+  ['Left click', 'Fire'],
+  ['Right click', 'Aim down sights'],
+  ['W A S D', 'Move'],
+  ['Shift', 'Sprint'],
+  ['Space', 'Jump / climb'],
+  ['C', 'Crouch (slide if sprinting)'],
+  ['R', 'Reload'],
+  ['1 / 2 / wheel', 'Primary / sidearm'],
+  ['G', 'Throw a grenade'],
+  ['Tab', 'Scoreboard'],
+  ['Esc', 'Menu & settings'],
+];
+// Touch rows show the real button icons (#id), or a word for the thumbs.
+const TUT_TOUCH = [
+  ['Left thumb', 'Move (push up to sprint)'],
+  ['Right thumb', 'Aim'],
+  ['#btnFire', 'Fire (drag on it to aim)'],
+  ['#btnAds', 'Aim down sights'],
+  ['#btnJump', 'Jump / climb'],
+  ['#btnCrouch', 'Crouch (slide if sprinting)'],
+  ['#btnReload', 'Reload'],
+  ['#btnSwap', 'Switch to sidearm and back'],
+  ['#btnNade', 'Throw a grenade'],
+  ['#menuBtn', 'Menu & settings'],
+];
+
+function renderTutorial(mode, me) {
+  const rows = mode === 'touch' ? TUT_TOUCH : TUT_KEYS;
+  const key = (k) => (k[0] === '#' ? `<kbd class="icon">${document.querySelector(k + ' svg')?.outerHTML || ''}</kbd>` : `<kbd>${k}</kbd>`);
+  $('tutBody').innerHTML = rows.map(([k, v]) => `${key(k)}<span>${v}</span>`).join('');
+  $('tutFoot').textContent = mode === 'touch' ? 'Tap ✕ to hide. Menu → Show controls brings it back.' : 'Press H to hide or show this.';
+  const C = classOf(me?.weapon);
+  $('tutClass').innerHTML = `Class: <b>${C.name}</b> · <b>${C.skill}:</b> ${escapeHtml(C.desc)}`;
+}
+
+function showTutorial(on) {
+  hud.tutPinned = on;
+  if (!on) hud.tutUntil = 0;
+}
+
+function updateTutorial(me, sNow) {
+  const el = $('tutorial');
+  const left = hud.tutUntil - sNow;
+  const show = me.alive && (hud.tutPinned || left > 0);
+  if (el.hidden === show) el.hidden = !show;
+  if (!show) return;
+  const mode = input.usedTouch || !input.finePointer ? 'touch' : 'keys';
+  const key = mode + (me.weapon || '');
+  if (hud.tutMode !== key) {
+    hud.tutMode = key;
+    renderTutorial(mode, me);
+  }
+  el.classList.toggle('fading', !hud.tutPinned && left < 600);
+  $('tutBar').style.transform = `scaleX(${hud.tutPinned ? 1 : Math.max(0, left / TUTORIAL_MS)})`;
+}
+
+$('tutClose').onclick = () => showTutorial(false);
+window.addEventListener('keydown', (e) => {
+  if (!app.match || e.repeat || e.target instanceof HTMLInputElement || e.key.toLowerCase() !== 'h') return;
+  showTutorial($('tutorial').hidden);
+});
+
 let debugFrames = 0;
 let debugT = 0;
 $('debug').hidden = !DEBUG;

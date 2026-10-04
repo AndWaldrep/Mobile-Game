@@ -17,8 +17,9 @@ even mid-match. There's nothing to install, and it runs on free GitHub Pages.
     skylights, high windows and a catwalk; a two-room site office in the
     middle with stairs up to a rooftop overlooking the yard; containers you
     can climb; an open quay by the water.
-- 6 loadouts, each with a trade-off (see **Weapons** below). Switch between lives.
-- 2 grenades per life, regenerating health, headshots, spawn protection,
+- 6 classes, each with its own gun, trade-offs and skill (see **Classes and
+  weapons** below), plus a sidearm pistol for everyone. Switch class between lives.
+- 2 grenades per life (4 for the Grenadier), regenerating health, headshots, spawn protection,
   kill feed, radar (enemies show up when they fire), and a UAV after 3 kills
   in a row
 - Bots at three skill levels. They find their way around the map, chase
@@ -32,24 +33,40 @@ even mid-match. There's nothing to install, and it runs on free GitHub Pages.
   strafe, crouch, flinch and fall; detailed guns with a red-dot or holo
   sight, scope, pump or bolt action, and a magazine-swap reload
 
-## Weapons
+## Classes and weapons
 
 You have 100 health, and it comes back if you avoid getting hit for 5
 seconds. Fights take long enough to react and get to cover: with every
 shot hitting, an automatic needs about half a second, and in real fights
 it's usually a couple of seconds.
 
+Your class decides your main gun and gives you a skill:
+
+| Class | Gun | Skill |
+|---|---|---|
+| **Gunslinger** | .50 Hand Cannon | **Quick Draw**: swaps weapons twice as fast |
+| **Scout** | Viper SMG | **Marathon**: sprints twice as long and gets their breath back faster |
+| **Assault** | Ranger AR | **Quick Hands**: reloads 30% faster |
+| **Heavy** | Bulwark LMG | **Body Armor**: takes 20% less damage from bullets (not grenades) |
+| **Grenadier** | Breacher shotgun | **Bandolier**: 4 grenades instead of 2 |
+| **Marksman** | Sniper | **Ghost**: firing doesn't put you on the enemy radar |
+
+Everyone also carries an **M9 Sidearm** pistol (switch with **⇄**, 1/2 or the
+mouse wheel). Each gun keeps its own ammo, so when your main gun runs dry,
+switching is faster than reloading. The sidearm is a backup (7 body hits to
+kill); the Gunslinger's hand cannon is the strong pistol (4 body hits).
+
 | Weapon | Good at | Paying for it with |
 |---|---|---|
-| **M9 Sidearm** (pistol) | Fastest running and aiming; ready the instant you stop sprinting | Weakest: 5+ hits to kill, small magazine |
+| **.50 Hand Cannon** (Gunslinger) | Fastest running and aiming; ready the instant you stop sprinting; 4 body hits | 8-round magazine, kicks hard, slow-ish fire rate |
 | **Viper SMG** | Huge fire rate; quick to aim; you move faster | Damage drops off fast past ~10 m |
 | **Ranger AR** | Good at every range | Best at none |
 | **Bulwark LMG** | 75-round belt; hits hard and stays accurate at range | Slowest automatic to move, aim, and reload; slow to fire after sprinting |
 | **Breacher** (shotgun) | One or two pumps kills up close | Useless past ~15 m; slow reload |
-| **Longbow** (sniper) | One hit to the body or head kills at any range | Slowest to move and aim; the scope sways unless you crouch and hold still; wild if you don't scope in; a scope glint gives you away |
+| **Sniper** | One hit to the body or head kills at any range | Slowest to move and aim; the scope sways unless you crouch and hold still; wild if you don't scope in; a scope glint gives you away |
 
-The loadout screen shows each gun's damage, range, fire rate, mobility and
-control as bars.
+The class picker shows each class's skill, and its gun's damage, range, fire
+rate, mobility and control as bars.
 
 ## Movement
 
@@ -72,8 +89,15 @@ Your view bobs as you walk, leans when you strafe, and dips when you land.
 | Jump / climb | **⤒** | Space |
 | Crouch / slide | **⤓** (while sprinting to slide) | C |
 | Reload / grenade | **↻** / **💣** | R / G |
+| Switch to sidearm and back | **⇄** | 1 / 2, or the mouse wheel |
 | Scoreboard / menu | Tap the score / **☰** | Tab / Esc (letting go of the mouse also opens the menu) |
+| Show the controls | **☰** → Show controls | H |
 | Full screen | **⛶** (top right) | |
+
+A guide to these controls shows on the left for the first 20 seconds of every
+match. On a computer, dying lets go of the mouse so you can pick your next
+class or open the settings; the next click or key press after you respawn
+captures it again.
 
 **Auto-fire** (on by default for touch) shoots when your crosshair is on an
 enemy in range, and **aim assist** slows your aim slightly over enemies.

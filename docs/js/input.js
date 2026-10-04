@@ -4,8 +4,10 @@
 // thumb movements directly for fine aim. Dragging on a FIRE button aims too.
 // On a computer: the mouse aims (no click needed), left click fires, right
 // click aims down sights, WASD moves, Shift sprints, Space jumps, C crouches,
-// R reloads and G throws a grenade. The first click or key press captures the
-// mouse so you can turn all the way around.
+// R reloads, G throws a grenade and 1/2 or the mouse wheel switch between your
+// primary and your sidearm. The first click or key press captures the mouse so
+// you can turn all the way around. While you're dead the mouse is let go
+// (freeMouse) so you can click the loadout and settings.
 
 const MOVE_R = 58;
 const LOOK_R = 60;
@@ -24,7 +26,8 @@ export class Input {
     this.mouseAds = false;
     this.ads = false;
     this.crouch = false;
-    this.queued = { jump: false, reload: false, nade: false };
+    this.queued = { jump: false, reload: false, nade: false, swap: null };
+    this.mouseFree = false;
     this.usedTouch = false;
     this.enabled = false;
 
@@ -145,6 +148,7 @@ export class Input {
     tap('btnCrouch', () => (this.crouch = !this.crouch));
     tap('btnReload', () => (this.queued.reload = true));
     tap('btnNade', () => (this.queued.nade = true));
+    tap('btnSwap', () => (this.queued.swap = -1));
 
     // Keyboard and mouse
     window.addEventListener('keydown', (e) => {
@@ -156,6 +160,8 @@ export class Input {
         if (k === 'r') this.queued.reload = true;
         if (k === 'g' || k === 'q') this.queued.nade = true;
         if (k === 'c' || k === 'control') this.crouch = !this.crouch;
+        if (k === '1' || k === '2') this.queued.swap = Number(k) - 1;
+        if (k === 'x') this.queued.swap = -1;
       }
       this.keys.add(k);
     });
@@ -168,7 +174,7 @@ export class Input {
     document.addEventListener(
       'pointerdown',
       (e) => {
-        if (e.pointerType !== 'mouse' || !this.enabled) return;
+        if (e.pointerType !== 'mouse' || !this.enabled || this.mouseFree) return;
         if (e.target.closest('button, input, a, label, #board, #deathScreen, #fsHelp')) return;
         e.preventDefault();
         e.stopPropagation();
@@ -187,6 +193,16 @@ export class Input {
       this.mouseButtons(e.buttons);
     });
     document.addEventListener('contextmenu', (e) => this.enabled && e.preventDefault());
+    // Mouse wheel switches weapons.
+    window.addEventListener(
+      'wheel',
+      (e) => {
+        if (!this.enabled || this.mouseFree || this.usedTouch || e.target.closest?.('#board, #deathScreen')) return;
+        e.preventDefault();
+        if (Math.abs(e.deltaY) > 2) this.queued.swap = -1;
+      },
+      { passive: false }
+    );
     // Moving the mouse aims, whether or not it's captured yet.
     document.addEventListener('pointermove', (e) => {
       if (e.pointerType !== 'mouse' || !this.enabled || this.usedTouch) return;
@@ -195,7 +211,7 @@ export class Input {
       this.mouseY += e.movementY || 0;
     });
     window.addEventListener('keydown', (e) => {
-      if (this.enabled && !this.usedTouch && !(e.target instanceof HTMLInputElement) && e.key !== 'Escape' && e.key !== 'Tab') this.lockMouse();
+      if (this.enabled && !this.mouseFree && !this.usedTouch && !(e.target instanceof HTMLInputElement) && e.key !== 'Escape' && e.key !== 'Tab') this.lockMouse();
     });
     window.addEventListener('blur', () => this.release());
   }
@@ -217,7 +233,7 @@ export class Input {
 
   // Capture the mouse (browsers only allow this right after a click or key press).
   lockMouse() {
-    if (this.locked() || this.usedTouch || !this.canvas.requestPointerLock) return;
+    if (this.locked() || this.usedTouch || this.mouseFree || !this.canvas.requestPointerLock) return;
     if (!this.finePointer && !this.usedMouse) return;
     try {
       const p = this.canvas.requestPointerLock();
@@ -237,6 +253,15 @@ export class Input {
     this.moveBase?.classList.remove('active');
     this.lookBase?.classList.remove('active');
     document.querySelectorAll('.ctl.pressed').forEach((b) => b.classList.remove('pressed'));
+  }
+
+  // Let go of the mouse (while dead) so the cursor can click menus; it's captured again on the next click or key.
+  freeMouse(on) {
+    this.mouseFree = on;
+    if (!on) return;
+    this.release();
+    this.ads = false;
+    if (this.locked()) document.exitPointerLock?.();
   }
 
   setEnabled(on) {
@@ -299,11 +324,13 @@ export class Input {
       fire: this.fireIds.size > 0 || this.mouseFire,
       reload: q.reload,
       nade: q.nade,
+      swap: q.swap,
       turnX,
       turnY,
       aiming: ll > 0.08 || this.fireIds.size > 0,
     };
     q.jump = q.reload = q.nade = false;
+    q.swap = null;
     return out;
   }
 }

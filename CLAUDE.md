@@ -33,7 +33,7 @@ GitHub Pages.
 
 ```bash
 npm start                 # local server for docs/ at http://localhost:3000
-npm test                  # node:test suites in test/ (26 tests, a few seconds)
+npm test                  # node:test suites in test/ (31 tests, a few seconds)
 npm run peer              # local PeerJS server on 127.0.0.1:9000 (for multiplayer testing)
 node tools/sim.mjs dust tdm 7 180 2   # headless bot match, prints balance numbers
 node tools/smoke.mjs solo|pc|duo      # drives the real game in headless Chromium (see below)
@@ -53,9 +53,14 @@ because it's large:
 `npm i --no-save playwright && npx playwright install chromium`.
 
 - `solo [map] [weapon]`: one phone against bots, saves screenshots to `tools/out/`.
-- `pc`: mouse aims without clicking, right click aims, fires while aimed, R, G.
+- `pc`: mouse aims without clicking, right click aims, fires while aimed, R, G,
+  2/wheel weapon swap, the controls guide and H, and dying frees the mouse
+  without popping the pause menu (pointer lock is faked so this can be tested).
 - `duo`: two phones: invite link → lobby → match → guest reloads and rejoins
   → results → back to lobby.
+
+If Playwright's own Chromium download doesn't match, point it at the
+preinstalled one: `CHROMIUM=/opt/pw-browsers/chromium node tools/smoke.mjs pc`.
 
 Headless Chromium renders with **SwiftShader** (software, about 3 fps with
 shadows). So:
@@ -83,12 +88,12 @@ layout).
 | `grid.js` | **The map model.** 1 m cells: a solid column plus an optional floating **slab** (roof, door lintel, or the wall above a window). Collision (`slide`, `floorAt`, `ceilAt`), bullets (`raycast`), grenades (`solidAt`), bot A* over (cell, level) nodes, `reachable()`. No Three.js, so the room and tests use it too. |
 | `maps.js` | The two maps (Dust Yard, Dockyard) built with `box/mbox/stairs/slab/building/spawn/prop`. Both are mirror-symmetric in z, so `mbox` places a box and its mirror. |
 | `player.js` | `PlayerSim` movement: momentum, strafe/backpedal penalties, sprint stamina, slide, mantle (climb ledges up to ~2 m), ceilings, landing. Hitboxes (head sphere + body cylinder). Health regen (`hpAt`). |
-| `weapons.js` | The 6 weapons' stats (damage falloff, rpm, mag, reload, spread, move/ADS/sprint-out speeds, UI `stats`) and `WeaponState` (ammo, reload, ADS progress, bloom, movement spread). |
+| `weapons.js` | The weapons' stats (damage falloff, rpm, mag, reload, spread, move/ADS/sprint-out speeds, UI `stats`), the 6 `CLASSES` and their skills, and `WeaponState` (two slots: primary + sidearm, each with its own ammo; swap, reload, ADS progress, bloom, movement spread). |
 | `combat.js` | Shooting rays with spread (`shoot`, `trace`), `aimTarget` (auto-fire), grenade physics and blast. |
 | `bot.js` | Bot AI: perception with line of sight, reaction time, aim error that settles, strafing, grenades, A* roaming toward enemies/gunfire, unsticking. Three skill levels in `SKILL`. |
 | `world.js` | Three.js level from the grid: textured, normal-mapped surfaces (procedural canvas textures), baked AO, slabs, painted window/door decals, instanced barrels/sandbags, sky dome, decor (dunes/sea, ship, crane), props, clouds, `buildEnvScene` for reflections. |
 | `soldier.js` | Other soldiers: segmented model (hips/thighs/shins/torso/head/aim group) with camo atlas + vertex colors, IK-posed arms holding a real gun, run/strafe/crouch/jump/flinch/death animations, name labels, muzzle flash, sniper scope glint. |
-| `guns.js` | Gun models for all 6 weapons (detailed for first person, simpler for others), merged per material. |
+| `guns.js` | Gun models for all 7 weapons (the hand cannon and sidearm share `pistolBody`) (detailed for first person, simpler for others), merged per material. |
 | `viewmodel.js` | Your own gun and hands in a separate scene drawn on top: bob, sway, ADS, sprint pose, magazine-swap reload, pump/bolt action, shell casings, muzzle flash and light. |
 | `fx.js` | Pools: tracers, impact puffs and sparks, blood, bullet-hole decals, explosions (flash light + shockwave), grenade meshes. |
 | `input.js` | Twin floating sticks, buttons, keyboard and mouse (see "Gotchas"). |
@@ -126,10 +131,22 @@ layout).
 - Floats: grid heights are Float32 (`3.2` is stored as `3.2000000476…`), so
   compare with a tolerance in tests.
 
+### Classes and the sidearm
+
+A loadout is a class, keyed by its primary weapon's id (`pistol`, `smg`, `ar`,
+`lmg`, `shotgun`, `sniper`), so the network and lobby still send it as
+`weapon`. `CLASSES` in `weapons.js` holds each skill's numbers; they're applied
+where they act: `reloadMul`/`swapMul`/`nades` in `WeaponState`, `stamina` in
+`PlayerSim`, `armor` in `Room.applyHit` (bullets only), `quiet` in main.js's
+radar. Everyone also has the `sidearm` (`secondary: true`, so it's not in
+`WEAPON_IDS`). The current slot goes out as `sec` on state messages so other
+phones draw the right gun. The `pistol` id is the Gunslinger's .50 Hand
+Cannon, deliberately much stronger than the sidearm.
+
 ### Adding a weapon
 
 Touch all of these:
-- `weapons.js`: stats, including the `stats` bars shown in the loadout.
+- `weapons.js`: stats, including the `stats` bars shown in the loadout, and a `CLASSES` entry with its skill.
 - `guns.js`: a `BUILD` entry.
 - `soldier.js`: `GRIPS` (where the hands go).
 - `audio.js`: a `GUNS` entry.
@@ -175,12 +192,14 @@ for enterable buildings.
 
 ## Current state (all working, tested, live)
 
-- 2 maps with enterable buildings, 2 modes (TDM, FFA), 6 weapons, bots at 3
+- 2 maps with enterable buildings, 2 modes (TDM, FFA), 6 classes with skills
+  plus a sidearm for everyone, a 20-second controls guide at match start, bots at 3
   skill levels, grenades, UAV streak, killfeed, faded top-right radar, health
   panel with damage trail and regen glow, stamina bar.
 - Settings: aim speed, auto-fire, aim assist, invert, left FIRE button, button
   size, graphics (Auto/High/Low, where Auto steps down on slow phones), sound.
-- Touch, PC mouse + keyboard (mouse aims without clicking; Esc → menu) and
+- Touch, PC mouse + keyboard (mouse aims without clicking; Esc → menu; dying
+  frees the mouse for the death-screen class picker and settings) and
   portrait all work.
 
 ## Not verified / known limits
@@ -198,4 +217,4 @@ for enterable buildings.
 Objective modes (Domination, Hardpoint), a killcam, more maps, weapon
 attachments or perks, recoil patterns per gun, hit-direction audio, prone,
 lean around corners, a third map with multi-story buildings (would need a
-second slab per cell in `grid.js`), tutorial/onboarding for touch controls.
+second slab per cell in `grid.js`), bots that switch to their sidearm.

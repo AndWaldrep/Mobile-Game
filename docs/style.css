@@ -148,6 +148,10 @@ button:disabled { opacity: 0.5; }
 .loadout button.selected { border-color: var(--accent); background: rgba(255, 176, 0, 0.14); }
 .loadout .wicon { font-size: 20px; }
 .loadout .wname { font-weight: 800; font-size: 15px; }
+.loadout .wclass { font-size: 11px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: var(--accent); }
+.loadout .wskill { font-size: 12px; line-height: 1.25; }
+.loadout .wskill b { color: var(--accent); }
+.loadout.compact .wclass { font-size: 9px; letter-spacing: 0.5px; }
 .loadout small { color: var(--muted); font-size: 12px; line-height: 1.25; }
 .loadout.compact { grid-template-columns: repeat(4, 1fr); }
 .loadout.compact button { align-items: center; text-align: center; padding: 8px 4px; }
@@ -291,6 +295,10 @@ input[type='range'] { padding: 0; accent-color: var(--accent); }
 #btnReload { right: calc(194px * var(--s) + var(--safe-r)); bottom: calc(40px * var(--s) + var(--safe-b)); width: calc(44px * var(--s)); height: calc(44px * var(--s)); }
 #btnNade { right: calc(24px * var(--s) + var(--safe-r)); bottom: calc(222px * var(--s) + var(--safe-b)); width: calc(46px * var(--s)); height: calc(46px * var(--s)); }
 #btnFireL { left: calc(26px * var(--s) + var(--safe-l)); bottom: calc(46% + 10px); }
+#btnSwap { right: calc(196px * var(--s) + var(--safe-r)); bottom: calc(98px * var(--s) + var(--safe-b)); width: calc(44px * var(--s)); height: calc(44px * var(--s)); flex-direction: column; gap: 0; }
+#btnSwap svg { width: 50%; height: 50%; }
+#btnSwap span { font-size: calc(10px * var(--s)); font-weight: 800; line-height: 1; }
+#btnSwap.sec { border-color: var(--accent); }
 
 @media (orientation: portrait) {
   #btnFire { right: calc(20px * var(--s) + var(--safe-r)); bottom: calc(150px * var(--s) + var(--safe-b)); }
@@ -300,6 +308,7 @@ input[type='range'] { padding: 0; accent-color: var(--accent); }
   #btnReload { right: calc(116px * var(--s) + var(--safe-r)); bottom: calc(110px * var(--s) + var(--safe-b)); }
   #btnNade { right: calc(26px * var(--s) + var(--safe-r)); bottom: calc(244px * var(--s) + var(--safe-b)); }
   #btnFireL { left: calc(20px * var(--s) + var(--safe-l)); bottom: calc(250px * var(--s) + var(--safe-b)); }
+  #btnSwap { right: calc(152px * var(--s) + var(--safe-r)); bottom: calc(34px * var(--s) + var(--safe-b)); }
   #moveZone, #lookZone { top: 40%; }
 }
 
@@ -539,6 +548,57 @@ body.playing .iconBtn.floating { display: none; }
 }
 .deathCard { text-align: center; background: rgba(10, 12, 15, 0.75); padding: 16px 20px; border-radius: 16px; display: flex; flex-direction: column; gap: 8px; max-width: 420px; }
 #killedBy { font-size: 22px; font-weight: 800; }
+#deathMenuBtn { align-self: center; }
+
+/* Controls guide shown for the first 20 seconds of a match (H or the menu brings it back). */
+#tutorial {
+  position: absolute;
+  left: calc(10px + var(--safe-l));
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 4;
+  width: 250px;
+  max-height: calc(100% - 120px);
+  overflow: hidden;
+  background: rgba(10, 12, 15, 0.72);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 8px 10px 10px;
+  font-size: 12px;
+  pointer-events: none;
+  transition: opacity 0.4s;
+}
+#tutorial.fading { opacity: 0; }
+#tutorial .tutHead { display: flex; align-items: center; justify-content: space-between; font-size: 13px; letter-spacing: 1px; text-transform: uppercase; color: var(--accent); }
+#tutClose { pointer-events: auto; background: rgba(255, 255, 255, 0.1); border-radius: 50%; width: 26px; height: 26px; padding: 0; font-size: 13px; }
+#tutClass { margin: 4px 0 6px; line-height: 1.3; color: #ddd; }
+#tutClass b { color: var(--accent); }
+#tutBody { display: grid; grid-template-columns: auto 1fr; gap: 3px 8px; align-items: center; }
+#tutBody kbd {
+  font: 700 11px ui-monospace, monospace;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  padding: 1px 5px;
+  white-space: nowrap;
+  justify-self: start;
+}
+#tutBody kbd.icon { display: flex; width: 22px; height: 18px; padding: 1px; align-items: center; justify-content: center; }
+#tutBody kbd.icon svg { width: 15px; height: 15px; }
+#tutFoot { margin-top: 6px; color: var(--muted); font-size: 11px; }
+#tutBar { display: block; height: 3px; margin-top: 6px; border-radius: 2px; background: var(--accent); transform-origin: left; }
+@media (orientation: portrait) {
+  #tutorial { top: calc(190px + var(--safe-t)); transform: none; width: 240px; max-height: calc(100% - 420px); overflow-y: auto; }
+}
+/* Landscape phones are short: use the full height and a wider panel so every row fits on one line. */
+@media (orientation: landscape) and (max-height: 500px) {
+  #tutorial { width: 290px; max-height: calc(100% - 16px); font-size: 11px; padding: 6px 8px 8px; }
+  #tutClass { margin: 2px 0 4px; }
+  #tutBody { gap: 1px 6px; }
+  #tutFoot { margin-top: 3px; }
+  #tutBar { margin-top: 4px; }
+}
 #respawnIn { color: var(--accent); font-weight: 800; }
 
 #board {

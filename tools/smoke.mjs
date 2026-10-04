@@ -8,7 +8,8 @@
 //
 // Usage:
 //   node tools/smoke.mjs solo [dust|docks] [weapon]   one phone vs bots, screenshots + checks
-//   node tools/smoke.mjs pc                           mouse/keyboard: aim, fire while aimed, R, G, Space
+//   node tools/smoke.mjs pc                           mouse/keyboard: aim, fire while aimed, R, G, swap, controls
+//                                                     guide, and dying lets go of the mouse
 //   node tools/smoke.mjs duo                          two phones: invite link, lobby, match, rejoin, results
 //
 // Screenshots go to tools/out/. Headless Chromium renders with SwiftShader (software, ~3 fps
@@ -23,7 +24,7 @@ const OUT = new URL('./out/', import.meta.url).pathname;
 fs.mkdirSync(OUT, { recursive: true });
 const [mode = 'solo', map = 'dust', weapon = 'ar'] = process.argv.slice(2);
 
-const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+const browser = await chromium.launch({ executablePath: process.env.CHROMIUM || undefined, args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 const problems = [];
 
 async function phone(name, opts = {}) {
@@ -35,8 +36,21 @@ async function phone(name, opts = {}) {
     ({ name, weapon, gfx, noLock }) => {
       localStorage.setItem('po-profile', JSON.stringify({ name, color: '#43a047', weapon }));
       localStorage.setItem('po-settings', JSON.stringify({ gfx, autoFire: false }));
-      // Pointer lock in headless Chromium makes synthetic mouse moves cancel out; skip it.
-      if (noLock) HTMLCanvasElement.prototype.requestPointerLock = function () {};
+      // Pointer lock in headless Chromium makes synthetic mouse moves cancel out, so fake it:
+      // the game sees a locked mouse, but the moves still arrive.
+      if (noLock) {
+        let locked = null;
+        const changed = () => document.dispatchEvent(new Event('pointerlockchange'));
+        Object.defineProperty(Document.prototype, 'pointerLockElement', { get: () => locked, configurable: true });
+        HTMLCanvasElement.prototype.requestPointerLock = function () {
+          if (locked !== this) setTimeout(changed);
+          locked = this;
+        };
+        Document.prototype.exitPointerLock = function () {
+          if (locked) setTimeout(changed);
+          locked = null;
+        };
+      }
     },
     { name, weapon, gfx: opts.gfx || 'high', noLock: !!opts.pc }
   );
@@ -49,7 +63,10 @@ async function phone(name, opts = {}) {
 const url = (extra = '') => `${BASE}?peerserver=${PEER}${extra}`;
 const me = (p) => p.evaluate(() => {
   const m = window.pocketOps.app.match.me;
-  return { ammo: m.wpn.ammo, ads: +m.wpn.adsT.toFixed(2), y: +m.sim.y.toFixed(2), yaw: +m.sim.yaw.toFixed(3), reloading: m.wpn.reloading > 0, nades: m.wpn.nades };
+  return {
+    ammo: m.wpn.ammo, ads: +m.wpn.adsT.toFixed(2), y: +m.sim?.y.toFixed(2), yaw: +m.sim?.yaw.toFixed(3), reloading: m.wpn.reloading > 0, nades: m.wpn.nades,
+    gun: m.wpn.w.id, alive: m.alive, weapon: m.weapon,
+  };
 });
 
 async function host(p, { bots = 0, map: mp = map } = {}) {
@@ -96,6 +113,48 @@ if (mode === 'solo') {
   await p.keyboard.press('g');
   await p.waitForTimeout(1500);
   console.log('G throws a grenade:', (await me(p)).nades < 2);
+  console.log('controls guide showing:', await p.isVisible('#tutorial'), '|', (await p.textContent('#tutBody')).includes('Shift'));
+  await p.screenshot({ path: `${OUT}pc-guide.png` });
+  await p.keyboard.press('h');
+  await p.waitForTimeout(800);
+  const hid = !(await p.isVisible('#tutorial'));
+  await p.keyboard.press('h');
+  await p.waitForTimeout(800);
+  console.log('H hides and shows the guide:', hid && (await p.isVisible('#tutorial')));
+  await p.keyboard.press('2');
+  await p.waitForTimeout(1200);
+  const sec = await me(p);
+  await p.mouse.wheel(0, 120);
+  await p.waitForTimeout(1200);
+  console.log('2 switches to the sidearm:', sec.gun === 'sidearm', '| wheel switches back:', (await me(p)).gun === 'ar');
+  console.log('locked before dying:', await p.evaluate(() => window.pocketOps.input.locked()));
+  // Die (a grenade at your own feet), then check the mouse is free to use the menus.
+  const die = async () => {
+    await p.waitForFunction(() => window.pocketOps.app.match.me.alive, null, { timeout: 30000 });
+    await p.waitForTimeout(2000); // past spawn protection
+    await p.evaluate(() => {
+      const { app, net } = window.pocketOps;
+      net.send({ t: 'hit', id: app.myId, target: app.myId, dmg: 200, w: 'nade' });
+    });
+    await p.waitForSelector('#deathScreen:not([hidden])');
+  };
+  await die();
+  await p.click('#deathMenuBtn');
+  const freed = await p.evaluate(() => ({ locked: window.pocketOps.input.locked(), free: window.pocketOps.input.mouseFree }));
+  console.log('dying lets go of the mouse:', !freed.locked && freed.free, '| settings open from the death screen:', await p.isVisible('#menuExtras'));
+  await p.click('#resumeBtn');
+  await die();
+  await p.click('#deathLoadout [data-weapon="shotgun"]');
+  await p.screenshot({ path: `${OUT}pc-dead.png` });
+  console.log('no pause menu popped up:', !(await p.isVisible('#board')));
+  console.log('clicked a class while dead:', await p.evaluate(() => window.pocketOps.app.profile.weapon), '| still unlocked:', !(await p.evaluate(() => window.pocketOps.input.locked())));
+  await p.waitForFunction(() => window.pocketOps.app.match.me.alive, null, { timeout: 30000 });
+  await p.waitForTimeout(1000);
+  const back = await me(p);
+  console.log('respawned as Grenadier:', back.weapon === 'shotgun' && back.nades === 4);
+  await p.mouse.click(500, 300);
+  await p.waitForTimeout(800);
+  console.log('click captures the mouse again:', await p.evaluate(() => window.pocketOps.input.locked()));
 } else if (mode === 'duo') {
   const h = await phone('Host', { gfx: 'low' });
   await h.goto(url('&autopilot'));

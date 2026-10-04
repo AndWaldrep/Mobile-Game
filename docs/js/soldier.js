@@ -160,6 +160,7 @@ export function elbow(S, H, a, b, hint) {
 
 export const GRIPS = {
   pistol: { grip: [0, -0.1, 0.0], fore: [-0.02, -0.11, -0.01] },
+  sidearm: { grip: [0, -0.1, 0.0], fore: [-0.02, -0.11, -0.01] },
   lmg: { grip: [0, -0.14, 0.08], fore: [0, -0.09, -0.3] },
   ar: { grip: [0, -0.14, 0.07], fore: [0, -0.085, -0.27] },
   smg: { grip: [0, -0.13, 0.06], fore: [0, -0.09, -0.22] },
@@ -290,7 +291,7 @@ export class Soldier {
     const g = GRIPS[id] || GRIPS.ar;
     // The gun's stock sits in the right shoulder.
     // Long guns sit with the stock in the right shoulder; a pistol is held out in front.
-    const pistol = id === 'pistol';
+    const pistol = id === 'pistol' || id === 'sidearm';
     const gx = pistol ? 0.04 : 0.13;
     const gy = pistol ? -0.04 : -0.02;
     const gz = pistol ? -0.48 : -0.3;
